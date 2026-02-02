@@ -5,6 +5,14 @@ from scipy.special import expit as sigmoid
 from tqdm.auto import tqdm
 import typing
 
+from notreks.notreks import TrekRegularizer, PSTRegularizer, trek_value_grad
+from logger import LogConfig, StructuredLogger, build_default_logger
+import logging
+import torch
+import time
+
+from typing import Optional
+
 
 __all__ = ["DagmaLinear"]
 
@@ -13,7 +21,19 @@ class DagmaLinear:
     A Python object that contains the implementation of DAGMA for linear models using numpy and scipy.
     """
     
-    def __init__(self, loss_type: str, verbose: bool = False, dtype: type = np.float64) -> None:
+    def __init__(
+        self,
+        loss_type: str,
+        verbose: bool = False,
+        dtype: type = np.float64,
+        *,
+        trek_reg: Optional[TrekRegularizer] = None,
+        # logging (optional)
+        logger=None,
+        log_cfg=None,
+    ) -> None:
+
+
         r"""
         Parameters
         ----------
@@ -33,6 +53,18 @@ class DagmaLinear:
         self.loss_type = loss_type
         self.dtype = dtype
         self.vprint = print if verbose else lambda *a, **k: None
+        
+        self.trek_reg = trek_reg  # can be None
+
+        # torch settings for autograd
+        self._torch_dtype = torch.double
+        self._device = torch.device("cpu")
+        
+        # logging init (if you integrated structured logger previously)
+        self._logger = logger or build_default_logger(level=logging.INFO if verbose else logging.WARNING)
+        self._log_cfg = log_cfg or LogConfig(enabled=verbose)
+        self._slog = StructuredLogger(self._logger, self._log_cfg)
+
             
     def _score(self, W: np.ndarray) -> typing.Tuple[float, np.ndarray]:
         r"""
@@ -57,7 +89,9 @@ class DagmaLinear:
             R = self.X @ W
             loss = 1.0 / self.n * (np.logaddexp(0, R) - self.X * R).sum()
             G_loss = (1.0 / self.n * self.X.T) @ sigmoid(R) - self.cov
+            
         return loss, G_loss
+
 
     def _h(self, W: np.ndarray, s: float = 1.0) -> typing.Tuple[float, np.ndarray]:
         r"""
@@ -80,28 +114,25 @@ class DagmaLinear:
         G_h = 2 * W * sla.inv(M).T 
         return h, G_h
 
-    def _func(self, W: np.ndarray, mu: float, s: float = 1.0) -> typing.Tuple[float, np.ndarray]:
-        r"""
-        Evaluate value of the penalized objective function.
-
-        Parameters
-        ----------
-        W : np.ndarray
-            :math:`(d,d)` adjacency matrix
-        mu : float
-            Weight of the score function.
-        s : float, optional
-            Controls the domain of M-matrices. Defaults to 1.0.
-
-        Returns
-        -------
-        typing.Tuple[float, np.ndarray]
-            Objective value, and gradient of the objective
-        """
+    def _func(self, W: np.ndarray, mu: float, s: float = 1.0):
         score, _ = self._score(W)
         h, _ = self._h(W, s)
-        obj = mu * (score + self.lambda1 * np.abs(W).sum()) + h 
-        return obj, score, h
+    
+        trek_val, _ = trek_value_grad(
+            W,
+            self.trek_reg,
+            torch_dtype=self._torch_dtype,
+            device=self._device,
+        )
+    
+        obj = mu * (score + self.lambda1 * np.abs(W).sum()) + h
+    
+        tr = self.trek_reg
+        if tr is not None and tr.enabled() and tr.mode == "opt":
+            obj = obj + tr.weight * trek_val
+    
+        return obj, score, h, trek_val
+
     
     def _adam_update(self, grad: np.ndarray, iter: int, beta_1: float, beta_2: float) -> np.ndarray:
         r"""
@@ -176,6 +207,9 @@ class DagmaLinear:
             A boolean flag is returned to point success of the optimization. This can be False when at any iteration, the current
             W point went outside of the domain of M-matrices.
         """
+        t0 = time.time()
+        stage = getattr(self, "_stage", 0)
+
         obj_prev = 1e16
         self.opt_m, self.opt_v = 0, 0
         self.vprint(f'\n\nMinimize with -- mu:{mu} -- lr: {lr} -- s: {s} -- l1: {self.lambda1} for {max_iter} max iterations')
@@ -209,18 +243,84 @@ class DagmaLinear:
             
             Gobj = G_score + mu * self.lambda1 * np.sign(W) + 2 * W * M.T + mask_inc * np.sign(W)
             
+            # add trek penalty gradient if enabled and mode="opt"
+            trek_val, trek_grad = trek_value_grad(
+                W,
+                self.trek_reg,
+                torch_dtype=self._torch_dtype,
+                device=self._device,
+            )
+            if self.trek_reg is not None and self.trek_reg.enabled() and self.trek_reg.mode == "opt":
+                Gobj = Gobj + self.trek_reg.weight * trek_grad
+
+            
+            # ----- gradient diagnostics (raw objective gradient) -----
+            Gobj_norm = float(np.linalg.norm(Gobj))
+            G_score_norm = float(np.linalg.norm(G_score))
+            G_h_norm = float(np.linalg.norm(2 * W * M.T))
+            G_l1_norm = float(np.linalg.norm(mu * self.lambda1 * np.sign(W)))
+            G_inc_norm = float(np.linalg.norm(mask_inc * np.sign(W)))
+            
+            trek_weight = 0.0 if (self.trek_reg is None) else float(getattr(self.trek_reg, "weight", 0.0))
+            G_trek_norm = float(np.linalg.norm(trek_weight * trek_grad)) if trek_grad is not None else 0.0
+
             ## Adam step
             grad = self._adam_update(Gobj, iter, beta_1, beta_2)
+            grad_norm = float(np.linalg.norm(grad))
+            
             W -= lr * grad
             W *= mask_exc
-                
+            
             ## Check obj convergence
             if iter % self.checkpoint == 0 or iter == max_iter:
-                obj_new, score, h = self._func(W, mu, s)
-                self.vprint(f'\nInner iteration {iter}')
-                self.vprint(f'\th(W_est): {h:.4e}')
-                self.vprint(f'\tscore(W_est): {score:.4e}')
-                self.vprint(f'\tobj(W_est): {obj_new:.4e}')
+                obj_new, score, h, trek_val = self._func(W, mu, s)
+                
+                if self._log_cfg.enabled:
+                    trek_name = self.trek_reg.name if self.trek_reg is not None else "none"
+                    trek_mode = self.trek_reg.mode if self.trek_reg is not None else "off"
+                    trek_weight = float(self.trek_reg.weight) if self.trek_reg is not None else 0.0
+                    trek_cfg = {}
+                    if self.trek_reg is not None:
+                        trek_cfg = {k: v for k, v in self.trek_reg.cfg.items() if k != "I"}
+            
+                    self._slog.emit("minimize.checkpoint", {
+                        "iter": int(iter),
+                        "stage": int(stage),
+                        "elapsed_sec": float(time.time() - t0),
+            
+                        "obj_total": float(obj_new),
+                        "score_datafit": float(score),
+            
+                        "reg_dag_name": "dagma_logdet",
+                        "reg_dag_value": float(h),
+                        "reg_dag_cfg": {"s": float(s)},
+            
+                        "reg_trek_name": trek_name,
+                        "reg_trek_value": float(trek_val),
+                        "reg_trek_cfg": trek_cfg,
+                        "trek_mode": trek_mode,
+                        "trek_weight": trek_weight,
+            
+                        "mu": float(mu),
+                        "lr": float(lr),
+            
+                        # W stats
+                        "w_norm": float(np.linalg.norm(W)),
+                        "w_abs_sum": float(np.abs(W).sum()),
+                        "max_abs_w": float(np.abs(W).max()),
+                        "min_abs_w_nonzero": float(np.min(np.abs(W[np.nonzero(W)]))) if np.any(W != 0) else 0.0,
+            
+                        # gradient norms
+                        "grad_raw_norm": Gobj_norm,
+                        "grad_step_norm": grad_norm,
+                        "step_norm": float(lr * grad_norm),
+                        "grad_score_norm": G_score_norm,
+                        "grad_dag_norm": G_h_norm,
+                        "grad_l1_norm": G_l1_norm,
+                        "grad_inc_norm": G_inc_norm,
+                        "grad_trek_norm": G_trek_norm,
+                    })
+ 
                 if np.abs((obj_prev - obj_new) / obj_prev) <= tol:
                     pbar.update(max_iter-iter+1)
                     break
@@ -352,29 +452,80 @@ class DagmaLinear:
         self.h_final, _ = self._h(self.W_est)
         self.score_final, _ = self._score(self.W_est)
         self.W_est[np.abs(self.W_est) < w_threshold] = 0
+        
+        self._slog.close()
+
         return self.W_est
 
+
 def test():
-    from . import utils
-    from timeit import default_timer as timer
-    utils.set_random_seed(1)
-    
-    n, d, s0 = 500, 20, 20 # the ground truth is a DAG of 20 nodes and 20 edges in expectation
-    graph_type, sem_type = 'ER', 'gauss'
-    
+    """
+    Standalone test that also works when this file is executed directly
+    (no package context). Avoids relative imports.
+    """
+    import time
+    import numpy as np
+
+    # ---- robust imports (no relative dots) ----
+    try:
+        # normal package usage
+        from dagma import utils
+    except ImportError:
+        # fallback if running this file directly
+        import utils
+
+    try:
+        from notreks.mi_tests import get_I_from_full_pairwise_tests, summarize_I
+    except ImportError:
+        # fallback if midagma is not installed as package
+        from mi_tests import get_I_from_full_pairwise_tests, summarize_I
+
+    # ----------------------------------------------------
+    # reproducibility (avoid relying on utils.set_random_seed)
+    # ----------------------------------------------------
+    np.random.seed(1)
+
+    n, d, s0 = 500, 20, 20
+    graph_type, sem_type = "ER", "gauss"
+
     B_true = utils.simulate_dag(d, s0, graph_type)
     W_true = utils.simulate_parameter(B_true)
     X = utils.simulate_linear_sem(W_true, n, sem_type)
-    
-    model = DagmaLinear(loss_type='l2')
-    start = timer()
+
+    # ----------------------------------------------------
+    # build I via modern independence tests (HSIC/dCor)
+    # ----------------------------------------------------
+    I = get_I_from_full_pairwise_tests(
+        X,
+        alpha=0.05,
+        test="hsic",       # or "dcor"
+        num_perm=300,
+        seed=0,
+        bonferroni=True,
+        undirected=False,
+    )
+
+    summarize_I(I, d=d)
+
+    # ----------------------------------------------------
+    # run DAGMA with PST penalty
+    # ----------------------------------------------------
+    trek = PSTRegularizer(I=I, seq="exp", weight=0.1, mode="opt")
+    model = DagmaLinear(loss_type="l2", trek_reg=trek, verbose=True)
+
+
+    start = time.time()
     W_est = model.fit(X, lambda1=0.02)
-    end = timer()
+    end = time.time()
+
     acc = utils.count_accuracy(B_true, W_est != 0)
+
     print(acc)
-    print(f'time: {end-start:.4f}s')
-    
-if __name__ == '__main__':
+    print(f"time: {end-start:.4f}s")
+
+
+
+if __name__ == "__main__":
     test()
 
     
