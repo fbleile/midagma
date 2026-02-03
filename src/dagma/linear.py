@@ -7,6 +7,7 @@ import typing
 
 from notreks.notreks import TrekRegularizer, PSTRegularizer, trek_value_grad
 from logger import LogConfig, StructuredLogger, build_default_logger
+from debug import safe_inv_M
 import logging
 import torch
 import time
@@ -223,6 +224,9 @@ class DagmaLinear:
         for iter in range(1, max_iter+1):
             ## Compute the (sub)gradient of the objective
             M = sla.inv(s * self.Id - W * W) + 1e-16
+            #TODO
+            # M = safe_inv_M(W, s, eps=1e-8, debug=True)
+
             while np.any(M < 0): # sI - W o W is not an M-matrix
                 if iter == 1 or s <= 0.9:
                     self.vprint(f'W went out of domain for s={s} at iteration {iter}')

@@ -1,0 +1,13 @@
+LICENSE
+README.md
+pyproject.toml
+src/dagma/__init__.py
+src/dagma/linear.py
+src/dagma/locally_connected.py
+src/dagma/nonlinear.py
+src/dagma/utils.py
+src/dagma.egg-info/PKG-INFO
+src/dagma.egg-info/SOURCES.txt
+src/dagma.egg-info/dependency_links.txt
+src/dagma.egg-info/requires.txt
+src/dagma.egg-info/top_level.txt
