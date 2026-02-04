@@ -4,7 +4,7 @@ save_data_on_exit = True
 save_history = True
 save_non_project_files = False
 project_type = 'empty-project-type'
-recent_files = ['examples/test.py', 'src/dagma/linear.py', 'src/dagma/utils.py', 'src/notreks/notreks.py', 'examples/complete_test.py']
+recent_files = ['examples/complete_test.py', 'src/data/data_spec.py', 'src/data/data_gen.py', 'src/cli/cli_gen_data.py', 'configs/lin_sem_er/data.yaml', 'src/data/indep_spec.py', 'src/utils/graphs.py', 'src/data/graphs.py', 'src/data/sem.py']
 
 [main]
 version = 0.2.0

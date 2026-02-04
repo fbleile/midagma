@@ -33,11 +33,11 @@ import numpy as np
 import pandas as pd
 import torch
 
-from dagma import utils
-from dagma.linear import DagmaLinear
+from methods.dagma import utils
+from methods.dagma.linear import DagmaLinear
 
-from notreks.mi_tests import get_I_from_full_pairwise_tests, summarize_I
-from notreks.notreks import (
+from utils.mi_tests import get_I_from_full_pairwise_tests, summarize_I
+from utils.notreks import (
     PSTRegularizer,
     TCCRegularizer,
     pst,
@@ -45,7 +45,7 @@ from notreks.notreks import (
     trek_cycle_coupling_value_gradW,  # should support cycle_penalty="spectral"|"logdet"
 )
 
-from logger import LogConfig, build_default_logger
+from utils.logger import LogConfig, build_default_logger
 
 
 # -----------------------------
@@ -425,7 +425,7 @@ def default_suite() -> Tuple[DataSpec, ISpec, List[AlgoSpec], List[TrekRegSpec]]
             # DataSpec(seed=4, n=1000, d=10, s0=35, graph_type="ER", sem_type="gauss"),
             # DataSpec(seed=40, n=1000, d=10, s0=35, graph_type="ER", sem_type="gauss"),
             # DataSpec(seed=47, n=500, d=10, s0=35, graph_type="ER", sem_type="gauss"),
-            DataSpec(seed=61, n=1000, d=10, s0=30, graph_type="ER", sem_type="gauss"),
+            DataSpec(seed=61, n=200, d=10, s0=30, graph_type="ER", sem_type="gauss"),
             
         ]
 
@@ -447,16 +447,16 @@ def default_suite() -> Tuple[DataSpec, ISpec, List[AlgoSpec], List[TrekRegSpec]]
             agg="mean",
             mode="log",
         ),
-        # TrekRegSpec(
-        #     name="pst",
-        #     weight=1.0,
-        #     seq="exp",
-        #     K_log=40,
-        #     eps_inv=1e-8,
-        #     s=5.0,
-        #     agg="mean",
-        #     mode="opt",
-        # ),
+        TrekRegSpec(
+            name="pst",
+            weight=.1,
+            seq="inv",
+            K_log=40,
+            eps_inv=1e-8,
+            s=5.0,
+            agg="mean",
+            mode="opt",
+        ),
         # TrekRegSpec(
         #     name="pst",
         #     weight=10.0,
@@ -471,7 +471,7 @@ def default_suite() -> Tuple[DataSpec, ISpec, List[AlgoSpec], List[TrekRegSpec]]
             name="tcc",
             cycle_penalty="spectral",
             weight=.01,
-            w=10.,
+            w=.1,
             n_iter=10,
             eps=1e-12,
             version="approx_trek_graph",
