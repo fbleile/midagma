@@ -12,8 +12,7 @@ import shutil
 from pathlib import Path
 from jax import random
 
-from stadion.utils.launch import generate_run_commands
-from stadion.utils.parse import load_data_config, load_methods_config
+from src.utils.yaml import load_yaml
 
 from definitions import (
     PROJECT_DIR,
@@ -22,6 +21,7 @@ from definitions import (
     IS_CLUSTER,
     
     SUBDIR_RESULTS,
+    SUBDIR_DATA,
     
     YAML_RUN,
     DEFAULT_RUN_KWARGS,
@@ -31,6 +31,7 @@ from definitions import (
     
     CONFIG_DIR,
     CONFIG_DATA,
+    CONFIG_DATA_GRID,
     CONFIG_METHODS,
     CONFIG_METHODS_VALIDATION,
 )
@@ -40,7 +41,7 @@ from definitions import (
 class ExperimentManager:
     """Tool for clean and reproducible experiment handling via folders"""
 
-    def __init__(self, experiment, seed=0, verbose=True, compute="cluster", dry=True, n_datasets=None, only_methods=None,
+    def __init__(self, experiment, seed=0, verbose=True, compute="cluster", dry=True, n_datasets=1, only_methods=None,
                  scratch=False, subdir_results=None):
 
         self.experiment = experiment # lin-er-acyclic / lin-er / ... / nonlin-er-acyclic
@@ -56,7 +57,12 @@ class ExperimentManager:
         self.slurm_logs_dir = SLURM_LOGS_DIR
         Path(self.slurm_logs_dir).mkdir(exist_ok=True)
 
+        self.n_datasets = n_datasets
+        
+        # Data setup
+
         self.data_config_path = self.config_path / CONFIG_DATA
+        self.data_grid_config_path = self.config_path / CONFIG_DATA_GRID
         self.methods_config_path = self.config_path / CONFIG_METHODS
         self.methods_validation_config_path = self.config_path / CONFIG_METHODS_VALIDATION
 
@@ -64,6 +70,7 @@ class ExperimentManager:
             if self.config_path.exists() \
                 and self.config_path.is_dir():
                 print("experiment:       ", self.experiment, flush=True)
+                print("data directory:", self.data_path, flush=True, end="\n\n")
                 print("results directory:", self.store_path, flush=True, end="\n\n")
             else:
                 print(f"experiment `{self.experiment}` not specified in `{self.config_path}`."
@@ -71,28 +78,24 @@ class ExperimentManager:
                 exit(1)
 
         # parse configs
-        self.data_config = load_data_config(self.data_config_path, abspath=True, warn_if_grid=True)
+        self.data_config = load_yaml(self.data_config_path)
+        # TODO self.data_grid_config = load_yaml(self.data_grid_config_path)
+        self.methods_config = load_yaml(self.methods_config_path)
+        self.methods_validation_config = load_yaml(self.methods_validation_config_path)
+        
+        # Methods setup
 
-        self.methods_config = load_methods_config(self.methods_config_path, abspath=True, warn_if_grid=True)
-        self.methods_validation_config = load_methods_config(self.methods_validation_config_path, abspath=True, warn_if_not_grid=True)
+        # # adjust configs based on only_methods
+        # self.only_methods = only_methods
+        # if self.only_methods is not None:
+        #     for k in list(self.methods_config.keys()):
+        #         if not any([m in k for m in self.only_methods]):
+        #             del self.methods_config[k]
 
-        # adjust configs based on only_methods
-        self.only_methods = only_methods
-        if self.only_methods is not None:
-            for k in list(self.methods_config.keys()):
-                if not any([m in k for m in self.only_methods]):
-                    del self.methods_config[k]
-
-            if self.methods_validation_config is not None:
-                for k in list(self.methods_validation_config.keys()):
-                    if not any([m in k for m in self.only_methods]):
-                        del self.methods_validation_config[k]
-
-        self.n_datasets = n_datasets
-        if n_datasets is None and self.data_config is not None:
-            self.n_datasets = self.data_config["n_datasets"]
-        if n_datasets is None and self.data_grid_config is not None:
-            self.n_datasets_grid = next(iter(self.data_grid_config.values()))["n_datasets"]
+        #     if self.methods_validation_config is not None:
+        #         for k in list(self.methods_validation_config.keys()):
+        #             if not any([m in k for m in self.only_methods]):
+        #                 del self.methods_validation_config[k]
 
     def _inherit_specification(self, subdir, inherit_from):
         if inherit_from is not None:
@@ -143,47 +146,20 @@ class ExperimentManager:
 
 
     def make_data(self, check=False, grid=False):
-        if check:
-            assert self.store_path.exists(), "folder doesn't exist; run `--data` first"
-            paths_data = self._list_main_folders(EXPERIMENT_DATA)
-            assert len(paths_data) > 0, "data not created yet; run `--data` first"
-            final_data = list(filter(lambda p: p.name.rsplit("_", 1)[-1] == "final", paths_data))
-            if final_data:
-                assert len(final_data) == 1
-                return final_data[0]
-            else:
-                return paths_data[-1]
-
-        # select data config depending on whether we run a grid or not
-        if grid:
-            assert self.data_grid_config is not None, \
-                f"Error when loading or file not found for data_validation.yaml at path:\n" \
-                f"{self.data_grid_config_path}"
-            data_config_path = self.data_grid_config_path
-            config_file_name = EXPERIMENT_CONFIG_DATA_GRID
-            n_datasets = self.n_datasets_grid
-
-        else:
-            assert self.data_config is not None, \
-                f"Error when loading or file not found for data.yaml at path:\n" \
-                f"{self.data_config_path}"
-            data_config_path = self.data_config_path
-            config_file_name = EXPERIMENT_CONFIG_DATA
-            n_datasets = self.n_datasets
-
-        # init results folder
-        if not self.store_path.exists():
-            self.store_path.mkdir(exist_ok=False, parents=True)
+        assert self.data_config is not None, \
+            f"Error when loading or file not found for data.yaml at path:\n" \
+            f"{self.data_config_path}"
+        n_datasets = self.n_datasets
 
         # init data folder
-        path_data = self._init_folder(EXPERIMENT_DATA)
-        self._copy_file(data_config_path, path_data / config_file_name)
+        path_data = self._init_folder(SUBDIR_DATA)
+        self._copy_file(self.data_config_path, path_data / config_file_name)
         if self.dry:
             shutil.rmtree(path_data)
 
         # launch runs that generate data
         experiment_name = kwargs.experiment.replace("/", "--")
-        cmd = f"python '{PROJECT_DIR}/experiment/data.py' " \
+        cmd = f"python '{PROJECT_DIR}/src/data/data_gen.py' " \
               r"--seed \$SLURM_ARRAY_TASK_ID " \
               f"--data_config_path '{data_config_path}' " \
               f"--path_data '{path_data}' "

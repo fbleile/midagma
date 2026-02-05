@@ -50,7 +50,7 @@ def _parse_w_ranges(x: Any) -> Tuple[Tuple[float, float], ...]:
     return tuple(out)
 
 
-def load_data_config(path: Path) -> tuple[str, int, DataSpec, ISpec]:
+def load_data_config_to_spec(path: Path) -> tuple[str, int, DataSpec, ISpec]:
     """
     Works with THIS YAML shape (flat top-level keys):
       id, n_datasets, n, d, s0, graph_type, sem_type, noise_scale, w_ranges,
@@ -58,9 +58,8 @@ def load_data_config(path: Path) -> tuple[str, int, DataSpec, ISpec]:
     """
     cfg = load_yaml(path)
 
-    cfg_id = str(cfg.get("id", path.parent.name))
-    n_datasets = int(cfg.get("n_datasets", 1))
-
+    cfg_id = path.parent.name
+    
     # --- DataSpec from top-level keys ---
     data_keys = set(DataSpec.__dataclass_fields__.keys())
     data_dict = _pick(cfg, data_keys)
@@ -75,7 +74,7 @@ def load_data_config(path: Path) -> tuple[str, int, DataSpec, ISpec]:
     indep_cfg = cfg.get("independencies", {})
     i_spec = ISpec(**indep_cfg)
 
-    return cfg_id, n_datasets, data_spec, i_spec
+    return cfg_id, data_spec, i_spec
 
 
 def to_yaml_dict(cfg_id: str, n_datasets: int, data_spec: DataSpec, i_spec: ISpec) -> Dict[str, Any]:
@@ -92,6 +91,6 @@ def to_yaml_dict(cfg_id: str, n_datasets: int, data_spec: DataSpec, i_spec: ISpe
     return d
 
 
-def save_data_config(path: Path, cfg_id: str, n_datasets: int, data_spec: DataSpec, i_spec: ISpec) -> None:
-    save_yaml(to_yaml_dict(cfg_id, n_datasets, data_spec, i_spec), path)
+def save_data_config(path: Path, data_spec: DataSpec, i_spec: ISpec) -> None:
+    save_yaml(to_yaml_dict(data_spec, i_spec), path)
 

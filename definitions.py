@@ -19,8 +19,7 @@ except Exception:
 
 # ---------- project roots ----------
 # file is src/definitions.py -> project root is parents[1] if src is directly under root
-SRC_DIR = Path(__file__).resolve().parent
-PROJECT_DIR = SRC_DIR.parent
+PROJECT_DIR = Path(__file__).resolve().parent
 ROOT_DIR = PROJECT_DIR  # synonym
 
 # heuristic for cluster detection
@@ -46,6 +45,7 @@ SLURM_LOGS_DIR = PROJECT_DIR / SUBDIR_SLURM_LOGS
 # ---------- experiment structure ----------
 SUBDIR_EXPERIMENTS = SRC_DIR / "experiments"
 CONFIG_DATA = "data.yaml"
+CONFIG_DATA_GRID = "grid.yaml"
 CONFIG_METHODS = "methods.yaml"
 ONFIG_METHODS_VALIDATION = "methods_validation.yaml"
 

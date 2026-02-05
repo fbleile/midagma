@@ -163,7 +163,7 @@ if __name__ == "__main__":
     parser.add_argument("--data_config_path", type=Path, required=True)
     parser.add_argument("--path_data", type=Path, required=True)
     parser.add_argument("--seed", type=int, required=True)
-    parser.add_argument("--n_datasets", type=int, required=False)
+    parser.add_argument("--n_datasets", type=int, required=False, default=1)
     parser.add_argument("--sanity_check_plots", action="store_true")
     args = parser.parse_args()
 
@@ -172,7 +172,7 @@ if __name__ == "__main__":
     path_data = resolve_from_project(args.path_data)
 
     # load spec
-    cfg_id, n_datasets, data_spec, i_spec = load_data_config(data_config_path)
+    cfg_id, data_spec, i_spec = load_data_config(data_config_path)
     
     if args.n_datasets is not None:
         n_datasets = args.n_datasets
