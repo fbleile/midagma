@@ -14,7 +14,9 @@ from jax import random
 
 from src.utils.yaml import load_yaml, expand_on_keys, save_yaml, grid_choice_filename
 from src.experiment.launch import generate_run_commands
-from src.data.sanity import _sanity_check
+from src.data.sanity import _sanity_check_data
+
+from src.methods.method_spec import load_methods_yaml, expand_methods_grid
 
 from definitions import (
     PROJECT_DIR,
@@ -176,7 +178,7 @@ class ExperimentManager:
     
         # 2) copy grid yaml into data folder root
         if not self.dry:
-            self._copy_file(self.data_config_path, path_data / "data.yaml")
+            self._copy_file(self.data_config_path, path_data / CONFIG_DATA)
         
         # 3) expand only classic keys from grid yaml (ignore structural lists)
         grid = load_yaml(self.data_config_path)
@@ -189,12 +191,12 @@ class ExperimentManager:
         candidates = list(expand_on_keys(grid, keys=DATA_GRID_KEYS, defaults=defaults))
         
         # 4) sanity filter + write valid configs into data_XX/configs/
-        configs_dir = path_data / "configs"
+        configs_dir = path_data / "_configs"
         valid_cfg_paths: list[Path] = []
         rejected: list[dict] = []
         
         for resolved, choices in candidates:
-            ok, reasons = _sanity_check(resolved)
+            ok, reasons = _sanity_check_data(resolved)
             if not ok:
                 rejected.append({
                     "choices": choices,
@@ -238,7 +240,7 @@ class ExperimentManager:
                 r"--seed \$SLURM_ARRAY_TASK_ID "
                 rf"--data_config_path '{cfg_path}' "
                 rf"--path_data '{path_data}' "
-                rf"--descr '{experiment_name}-data-c{cfg_idx}r\$SLURM_ARRAY_TASK_ID' "
+                rf"--descr '{experiment_name}-data-{cfg_idx:02d}\$SLURM_ARRAY_TASK_ID' "
             )
     
             generate_run_commands(
@@ -262,39 +264,27 @@ class ExperimentManager:
 
 
 
-    def launch_methods(self, train_validation=False, check=False, select_results=None):
-        # check data has been generated
+    def launch_methods(self, *, check: bool = False):
+        # 1) check data exists
         path_data = self.make_data(check=True)
-
+    
         if check:
-            paths_results = self._list_main_folders(EXPERIMENT_PREDS, inherit_from=path_data)
+            paths_results = self._list_main_folders(SUBDIR_RESULTS, inherit_from=path_data)
             assert len(paths_results) > 0, "results not created yet; run `--launch_methods` first"
-            selected = "final" if select_results is None else select_results
-            final_results = list(filter(lambda p: p.name.rsplit("_", 1)[-1] == selected, paths_results))
-            if final_results:
-                assert len(final_results) == 1
-                return final_results[0]
-            else:
-                return paths_results[-1]
-
-        # select method config depending on whether we do train_validation or testing
-        methods_config = self.methods_config
-        methods_config_path = self.methods_config_path
-        config_file_name = EXPERIMENT_CONFIG_METHODS
-
-        # init results folder
-        path_results = self._init_folder(EXPERIMENT_PREDS, inherit_from=path_data)
-        self._copy_file(methods_config_path, path_results / config_file_name)
-        if self.dry:
-            shutil.rmtree(path_results)
-
-        # print data sets expected and found
+            return paths_results[-1]
+    
+        # 2) init results folder
+        path_results = self._init_folder(SUBDIR_RESULTS, inherit_from=path_data)
+        self._copy_file(self.methods_config_path, path_results / CONFIG_METHODS)
+    
+        # 3) list dataset ids (folder names), ignore "_" folders
         data_found = sorted(
-            [p for p in path_data.iterdir() if p.is_dir()],
-            key=lambda p: int(p.name)
+            [p for p in path_data.iterdir() if p.is_dir() and not p.name.startswith("_")],
+            key=lambda p: p.name,
         )
-
-        print(f"Found data seeds: {[int(p.name) for p in data_found]}")
+        dataset_ids = [p.name for p in data_found]
+        
+        print(f"Found datasets: {dataset_ids}")
         if len(data_found) != self.n_datasets:
             warnings.warn(f"\nNumber of data sets does not match data config "
                 f"(got: `{len(data_found)}`, expected `{self.n_datasets}`).\n"
@@ -307,54 +297,93 @@ class ExperimentManager:
                 data_found = data_found[:self.n_datasets]
         elif self.verbose:
             print(f"\nLaunching experiments for {len(data_found)} data sets.")
-
-        n_launched, n_methods = 0, 0
-        path_data_root = data_found[0].parent
-
-        # launch runs that execute methods
-        print("baseline methods:\n")
-        experiment_name = kwargs.experiment.replace("/", "--")
-        for k, (method, hparams) in enumerate(methods_config.items()):
-
-            n_methods += 1
-            seed_indices = sorted([int(p.name) for p in data_found])
-
-            # if possible convert to range for shorter slurm command
-            if seed_indices == list(range(seed_indices[0], seed_indices[-1] + 1)):
-                seed_indices = range(seed_indices[0], seed_indices[-1] + 1)
-
-            cmd = f"python '{PROJECT_DIR}/experiment/methods.py' " \
-                  f"--method {method} " \
-                  r"--seed \$SLURM_ARRAY_TASK_ID " \
-                  r"--data_id \$SLURM_ARRAY_TASK_ID " \
-                  f"--path_results '{path_results}' " \
-                  f"--path_data_root '{path_data_root}' " \
-                  f"--path_methods_config '{methods_config_path}' " \
-                  rf"--descr '{experiment_name}-{method}-run-\$SLURM_ARRAY_TASK_ID' "
-            if train_validation:
-                cmd += f"--train_validation "
-                
-            print()
-            assert YAML_RUN in hparams or hparams is None, f"Add `__run__` specification of `{method}` method in yaml"
-            run_kwargs = hparams[YAML_RUN] if hparams is not None else DEFAULT_RUN_KWARGS
+            
+        dataset_ids = dataset_ids[: self.n_datasets]
+        data_found = data_found[: self.n_datasets]
+    
+        # 4) write datasets mapping file once (SLURM arrays want numeric index)
+        mapping_path = path_results / "datasets.txt"
+        if not self.dry:
+            (path_results / "logs").mkdir(exist_ok=True, parents=True)
+            mapping_path.write_text("\n".join(dataset_ids) + "\n", encoding="utf-8")
+    
+        # 5) expand methods.yaml into concrete configs (one YAML per instance)
+        grid = load_yaml(self.methods_config_path)
+        methods = grid.get("methods", [])
+        assert isinstance(methods, list), "methods.yaml must contain a top-level list: methods: [...]"
+    
+        configs_dir = path_results / "_configs_methods"
+        cfg_paths: list[Path] = []
+    
+        for m in methods:
+            assert isinstance(m, dict), "each entry in methods[] must be a dict"
+            block_id = str(m.get("id", "method"))
+    
+            # expand ALL scalar-list leaves inside this method entry
+            candidates = list(expand_on_keys(m, keys=None))
+    
+            for resolved, choices in candidates:
+                # filename encodes the hyperparam choices => uniqueness + provenance
+                fname = grid_choice_filename(choices, prefix=f"method_{block_id}")
+                p = configs_dir / fname
+                if not self.dry:
+                    save_yaml(resolved, p)
+                cfg_paths.append(p)
+    
+        cfg_paths = sorted(cfg_paths)
+        if self.verbose:
+            print(f"Expanded to {len(cfg_paths)} method configs in {configs_dir}")
+    
+        assert len(cfg_paths) > 0, "No expanded method configs produced (check methods.yaml)."
+    
+        # 6) launch: one job per (method_cfg, dataset_path)
+        experiment_name = self.experiment.replace("/", "--")
+        
+        n_launched = 0
+        
+        for method_cfg_path in cfg_paths:
+            method_id = method_cfg_path.stem
+        
+            base_cmd = (
+                f"python '{PROJECT_DIR}/src/methods/launch_methods.py' "
+                f"--method_id '{method_id}' "
+                f"--method_cfg '{method_cfg_path}' "
+                f"--path_data_root '{path_data}' "
+                f"--path_results '{path_results}' "
+            )
+        
+            command_list = []
+            for data_path in data_found[: self.n_datasets]:  # clip here if you want
+                cmd = base_cmd + (
+                    f"--dataset '{data_path}' "
+                    f"--descr '{experiment_name}-{method_id}-{data_path.name}' "
+                )
+                command_list.append(cmd)
+        
             cmd_args = dict(
-                array_indices=seed_indices,
+                command_list=command_list,
                 mode=self.compute,
                 dry=self.dry,
                 prompt=False,
                 output_path_prefix=f"{path_results}/logs/",
-                **run_kwargs,
+                hours=2,
+                mins=59,
+                n_cpus=2,
+                n_gpus=0,
+                mem=8000,
             )
-            # create log directory here already in case there is a failure before folder creation in script
-            if not self.dry:
-                (path_results / "logs").mkdir(exist_ok=True, parents=True)
-
-            # 1 job for each dataset
-            n_launched += len(seed_indices)
-            generate_run_commands(array_command=cmd, **cmd_args)
-
-        print(f"\nLaunched {n_launched} runs total ({n_methods} methods)")
+        
+            n_launched += len(command_list)
+            generate_run_commands(**cmd_args)
+        
+        print(
+            f"\nLaunched {n_launched} runs total "
+            f"({len(cfg_paths)} method instances × up to {min(len(data_found), self.n_datasets)} datasets)"
+        )
         return path_results
+
+
+
 
 
     def make_data_summary(self):
@@ -528,8 +557,8 @@ if __name__ == '__main__':
     if kwargs.data or kwargs.data_grid:
         _ = exp.make_data()
 
-    elif kwargs.methods or kwargs.methods_train_validation:
-        _ = exp.launch_methods(train_validation=kwargs.methods_train_validation)
+    elif kwargs.methods:
+        _ = exp.launch_methods()
 
     elif kwargs.summary_data:
         _ = exp.make_data_summary()

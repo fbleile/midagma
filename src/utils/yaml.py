@@ -5,7 +5,7 @@ import itertools
 import re
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Tuple, Union
+from typing import Any, Dict, Iterable, List, Tuple, Union, Optional
 
 import yaml
 
@@ -95,7 +95,19 @@ def _set_by_path(tree: Any, path: Tuple[Any, ...], value: Any) -> None:
     for key in path[:-1]:
         cur = cur[key]
     cur[path[-1]] = value
-
+    
+def _set_by_dotpath(cfg: Dict[str, Any], dotpath: str, value: Any) -> None:
+    """
+    Set cfg["a"]["b"]["c"] = value given "a.b.c".
+    Creates intermediate dicts if needed.
+    """
+    keys = dotpath.split(".")
+    cur: Any = cfg
+    for k in keys[:-1]:
+        if k not in cur or not isinstance(cur[k], dict):
+            cur[k] = {}
+        cur = cur[k]
+    cur[keys[-1]] = value
 
 def expand_grid_config(grid: Dict[str, Any]) -> Iterable[Tuple[Dict[str, Any], Dict[str, Any]]]:
     """
@@ -159,73 +171,109 @@ def list_yaml_files(dir_path: PathLike, *, exclude: Iterable[str] = ()) -> List[
 
 _GRID_KEY = "__grid__"
 
-
 def _is_scalar(x: Any) -> bool:
     return isinstance(x, (str, int, float, bool)) or x is None
 
+def _collect_scalar_list_paths(tree: Any, prefix: Tuple[Any, ...] = ()) -> List[Tuple[Tuple[Any, ...], List[Any]]]:
+    """
+    Collect paths whose value is a list of scalars (or empty).
+    We *skip* structural lists like:
+      - list of dicts
+      - list of lists / tuples
+    which covers e.g. w_ranges, hidden_sizes, methods: [...]
+    """
+    out: List[Tuple[Tuple[Any, ...], List[Any]]] = []
 
-def _set_by_dotpath(cfg: Dict[str, Any], dotpath: str, value: Any) -> None:
-    """
-    Set cfg["a"]["b"]["c"] = value given "a.b.c".
-    Creates intermediate dicts if needed.
-    """
-    keys = dotpath.split(".")
-    cur: Any = cfg
-    for k in keys[:-1]:
-        if k not in cur or not isinstance(cur[k], dict):
-            cur[k] = {}
-        cur = cur[k]
-    cur[keys[-1]] = value
-    
+    if isinstance(tree, dict):
+        for k, v in tree.items():
+            out.extend(_collect_scalar_list_paths(v, prefix + (k,)))
+        return out
+
+    if isinstance(tree, list):
+        if len(tree) == 0:
+            # empty list: treat as structural (do not expand)
+            return out
+
+        # expand ONLY if it's a list of scalars
+        if all(_is_scalar(x) for x in tree):
+            out.append((prefix, tree))
+        return out
+
+    return out
+
+def _set_by_path(tree: Any, path: Tuple[Any, ...], value: Any) -> None:
+    cur = tree
+    for key in path[:-1]:
+        cur = cur[key]
+    cur[path[-1]] = value
+
 def expand_on_keys(
     base: Dict[str, Any],
     *,
-    keys: List[str],
-    defaults: Dict[str, Any] | None = None,
+    keys: Optional[List[str]] = None,
+    defaults: Optional[Dict[str, Any]] = None,
 ) -> Iterable[Tuple[Dict[str, Any], Dict[str, Any]]]:
     """
-    Expand `base` by cartesian product over ONLY the given keys.
+    Expand `base` by cartesian product.
 
-    Behaviour:
-      - list  -> axis values
-      - scalar -> treated as [scalar]
-      - missing -> use defaults[k] if provided
+    If keys is provided:
+      - expand ONLY those *top-level* keys (same behavior as before)
 
-    This avoids special casing and makes behaviour uniform.
-    Structural lists (e.g. w_ranges) are untouched because you
-    simply don't include them in `keys`.
+    If keys is None:
+      - expand ALL scalar-list leaves recursively (skips structural lists automatically)
+
+    Returns:
+      (resolved_config, choices)
+    where choices maps either:
+      - key -> chosen_value          (keys provided)
+      - dotpath -> chosen_value      (keys None / recursive)
     """
     defaults = {} if defaults is None else defaults
 
-    axes: List[Tuple[str, List[Any]]] = []
+    # -------- mode A: explicit top-level keys --------
+    if keys is not None:
+        axes: List[Tuple[str, List[Any]]] = []
+        for k in keys:
+            if k in base:
+                v = base[k]
+            elif k in defaults:
+                v = defaults[k]
+            else:
+                continue
 
-    for k in keys:
-        if k in base:
-            v = base[k]
-        elif k in defaults:
-            v = defaults[k]
-        else:
-            continue
+            if not isinstance(v, list):
+                v = [v]
+            axes.append((k, v))
 
-        # 🔥 KEY CHANGE: scalar -> [scalar]
-        if not isinstance(v, list):
-            v = [v]
+        if not axes:
+            yield deepcopy(base), {}
+            return
 
-        axes.append((k, v))
+        axis_keys = [k for k, _ in axes]
+        axis_vals = [vs for _, vs in axes]
 
-    if not axes:
+        for combo in itertools.product(*axis_vals):
+            resolved = deepcopy(base)
+            choices: Dict[str, Any] = {}
+            for k, v in zip(axis_keys, combo):
+                resolved[k] = v
+                choices[k] = v
+            yield resolved, choices
+        return
+
+    # -------- mode B: expand all scalar-list leaves (recursive) --------
+    axes2 = _collect_scalar_list_paths(base)
+    if not axes2:
         yield deepcopy(base), {}
         return
 
-    axis_keys = [k for k, _ in axes]
-    axis_vals = [vs for _, vs in axes]
+    paths = [p for p, _ in axes2]
+    values = [vals for _, vals in axes2]
 
-    for combo in itertools.product(*axis_vals):
+    for combo in itertools.product(*values):
         resolved = deepcopy(base)
         choices: Dict[str, Any] = {}
-
-        for k, v in zip(axis_keys, combo):
-            resolved[k] = v
-            choices[k] = v
-
+        for path, val in zip(paths, combo):
+            _set_by_path(resolved, path, val)
+            choices[".".join(map(str, path))] = val
         yield resolved, choices

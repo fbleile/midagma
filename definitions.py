@@ -56,7 +56,7 @@ CONFIG_METHODS_HYPERPARAMS = "methods_hyperparams.yaml"
 SUBDIR_EXPERIMENTS = SRC_DIR / "experiments"
 EXPERIMENT_COMMANDS_LIST = SUBDIR_EXPERIMENTS / "command_list.txt"
 
-# ---------- canonical filenames (numpy storage) ----------
+# ---------- canonical filenames ----------
 FILE_X = "X.npy"
 FILE_B_TRUE = "B_true.npy"
 FILE_W_TRUE = "W_true.npy"
@@ -68,10 +68,11 @@ TRUE_DIR = "true"
 FILE_SUMMARY_CSV = "summary.csv"
 FILE_RESULTS_PARQUET = "results.parquet"
 
-# ---------- sanity bounds (optional) ----------
+# ---------- sanity bounds ----------
 NAN_MIN = -1e12
 NAN_MAX = +1e12
 
+# ---------- data generation ----------
 DEFAULT_GRAPH_TYPES = [
     "ER", "ER_acyclic",
     "scale_free", "scale_free_acyclic",
@@ -87,6 +88,13 @@ DEFAULT_SEM_TYPES = (
 )
 
 DATA_GRID_KEYS = ["n", "d", "s0", "graph_type", "sem_type", "min_indeps"]
+
+# ---------- methods ----------
+BASELINES = [
+    "dagma_linear",
+    "dagma_nonlinear",
+]
+
 
 # cluster
 YAML_RUN = "__run__"
