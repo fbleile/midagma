@@ -104,7 +104,7 @@ class TrekRegSpec:
     n_iter: int = 10
     eps: float = 1e-12
     version: str = "C"   # if you expose it; otherwise ignored by your wrapper
-    method: str = "eig_numpy"
+    method: str = "eig_torch"
     # logdet param (used by cycle_penalty="logdet")
     s_logdet: float = 2.0
 
@@ -178,7 +178,7 @@ def build_I(X: np.ndarray, B_true: np.ndarray, I_spec: ISpec) -> np.ndarray:
 
 
 # Base algorithm registry (easy to extend)
-AlgoRunner = Callable[[np.ndarray, np.ndarray, Any, AlgoSpec, logging.Logger, LogConfig], np.ndarray]
+AlgoRunner = Callable[[np.ndarray, Any, AlgoSpec, logging.Logger, LogConfig], np.ndarray]
 ALGO_REGISTRY: Dict[str, AlgoRunner] = {}
 
 
@@ -192,7 +192,6 @@ def register_algo(name: str):
 @register_algo("dagma_linear")
 def run_dagma_linear(
     X: np.ndarray,
-    B_true: np.ndarray,
     trek_reg: Any,
     algo_spec: AlgoSpec,
     logger: logging.Logger,

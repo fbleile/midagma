@@ -12,8 +12,9 @@ import shutil
 from pathlib import Path
 from jax import random
 
-from src.utils.yaml import load_yaml
+from src.utils.yaml import load_yaml, expand_on_keys, save_yaml, grid_choice_filename
 from src.experiment.launch import generate_run_commands
+from src.data.sanity import _sanity_check
 
 from definitions import (
     PROJECT_DIR,
@@ -33,7 +34,13 @@ from definitions import (
     CONFIG_DATA,
     CONFIG_DATA_GRID,
     CONFIG_METHODS,
-    CONFIG_METHODS_VALIDATION,
+    CONFIG_METHODS_HYPERPARAMS,
+    
+    DATA_DIR,
+    
+    DEFAULT_SEM_TYPES,
+    DEFAULT_GRAPH_TYPES,
+    DATA_GRID_KEYS,
 )
 
 
@@ -68,8 +75,7 @@ class ExperimentManager:
         self.data_config_path = exists_or_none(self.config_path / CONFIG_DATA)
         self.data_grid_config_path = exists_or_none(self.config_path / CONFIG_DATA_GRID)
         self.methods_config_path = exists_or_none(self.config_path / CONFIG_METHODS)
-        self.methods_validation_config_path = exists_or_none(self.config_path / CONFIG_METHODS_VALIDATION)
-
+        
         if self.verbose:
             if self.config_path.exists() \
                 and self.config_path.is_dir():
@@ -85,8 +91,6 @@ class ExperimentManager:
         self.data_config = load_yaml(self.data_config_path) if self.data_config_path else None
         # self.data_grid_config = load_yaml(self.data_grid_config_path) if self.data_grid_config_path else None
         self.methods_config = load_yaml(self.methods_config_path) if self.methods_config_path else None
-        self.methods_validation_config = load_yaml(self.methods_validation_config_path) if self.methods_validation_config_path else None
-
         
         # Methods setup
 
@@ -150,41 +154,112 @@ class ExperimentManager:
         shutil.copy(from_path, to_path)
 
 
-    def make_data(self, check=False):
-        assert self.data_config is not None, \
-            f"Error when loading or file not found for data.yaml at path:\n" \
-            f"{self.data_config_path}"
+    def make_data(self, check: bool = False):
+        if check:
+            assert self.store_path_data.exists(), "folder doesn't exist; run `--data` first"
+            paths_data = self._list_main_folders(SUBDIR_DATA, root_path=self.store_path_data)
+            assert len(paths_data) > 0, "data not created yet; run `--data` first"
+            final_data = list(filter(lambda p: p.name.rsplit("_", 1)[-1] == "final", paths_data))
+            if final_data:
+                assert len(final_data) == 1
+                return final_data[0]
+            return paths_data[-1]
+    
+        assert self.data_config_path is not None, \
+            f"Expected data_grid.yaml at:\n{self.config_path / CONFIG_DATA}"
+    
         n_datasets = self.n_datasets
-
-        # init data folder
-        path_data = self._init_folder(SUBDIR_DATA, root_path=self.store_path_data )
-        self._copy_file(self.data_config_path, path_data)
-        if self.dry:
-            shutil.rmtree(path_data)
-
-        # launch runs that generate data
-        experiment_name = kwargs.experiment.replace("/", "--")
-        cmd = f"python '{PROJECT_DIR}/src/data/data_gen.py' " \
-              r"--seed \$SLURM_ARRAY_TASK_ID " \
-              f"--data_config_path '{self.data_config_path}' " \
-              f"--path_data '{path_data}' " \
-              rf"--descr '{experiment_name}-data-\$SLURM_ARRAY_TASK_ID' " \
-
-        generate_run_commands(
-            array_command=cmd,
-            array_indices=range(1, n_datasets + 1),
-            mode=self.compute,
-            hours=2,
-            mins=59,
-            n_cpus=2,
-            n_gpus=0,
-            mem=2000,
-            prompt=False,
-            dry=self.dry,
-            output_path_prefix=self.slurm_logs_dir,
+        experiment_name = self.experiment.replace("/", "--")
+    
+        # 1) init data folder: data/<experiment>/data_XX/
+        path_data = self._init_folder(SUBDIR_DATA, root_path=self.store_path_data)
+    
+        # 2) copy grid yaml into data folder root
+        if not self.dry:
+            self._copy_file(self.data_config_path, path_data / "data.yaml")
+        
+        # 3) expand only classic keys from grid yaml (ignore structural lists)
+        grid = load_yaml(self.data_config_path)
+        
+        defaults = {
+            "graph_type": DEFAULT_GRAPH_TYPES,
+            "sem_type": DEFAULT_SEM_TYPES,
+        }
+        
+        candidates = list(expand_on_keys(grid, keys=DATA_GRID_KEYS, defaults=defaults))
+        
+        # 4) sanity filter + write valid configs into data_XX/configs/
+        configs_dir = path_data / "configs"
+        valid_cfg_paths: list[Path] = []
+        rejected: list[dict] = []
+        
+        for resolved, choices in candidates:
+            ok, reasons = _sanity_check(resolved)
+            if not ok:
+                rejected.append({
+                    "choices": choices,
+                    "reasons": reasons,
+                    # include a small snapshot of the key fields to eyeball quickly
+                    "n": resolved.get("n"),
+                    "d": resolved.get("d"),
+                    "s0": resolved.get("s0"),
+                    "graph_type": resolved.get("graph_type"),
+                    "sem_type": resolved.get("sem_type"),
+                })
+                continue
+        
+            fname = grid_choice_filename(choices, prefix="data")
+            p = configs_dir / fname
+            if not self.dry:
+                save_yaml(resolved, p)
+            valid_cfg_paths.append(p)
+        
+        cfg_paths = sorted(valid_cfg_paths)
+        
+        print(f'rejected: {rejected}')
+        print(f'len cfg_paths: {cfg_paths}')
+        
+        # write rejection report for debugging
+        if rejected and (not self.dry):
+            # keep it near the grid for easy inspection
+            save_yaml({"rejected": rejected}, path_data / "sanity_rejects.yaml")
+        
+        assert len(cfg_paths) > 0, (
+            "No valid configs after sanity checks. "
+            f"See {path_data / 'sanity_rejects.yaml'} for reasons."
         )
 
+    
+        # 5) one slurm array PER config, but with shifted dataset folder ids
+        for cfg_idx, cfg_path in enumerate(cfg_paths):
+            # dataset folder id is numeric: c cfg_idx + r SLURM_ARRAY_TASK_ID
+            cmd = (
+                rf"python '{PROJECT_DIR}/src/data/launch_data.py' "
+                r"--seed \$SLURM_ARRAY_TASK_ID "
+                rf"--data_config_path '{cfg_path}' "
+                rf"--path_data '{path_data}' "
+                rf"--descr '{experiment_name}-data-c{cfg_idx}r\$SLURM_ARRAY_TASK_ID' "
+            )
+    
+            generate_run_commands(
+                array_command=cmd,
+                array_indices=range(1, n_datasets + 1),
+                mode=self.compute,
+                hours=2,
+                mins=59,
+                n_cpus=2,
+                n_gpus=0,
+                mem=2000,
+                prompt=False,
+                dry=self.dry,
+                output_path_prefix=self.slurm_logs_dir,
+            )
+    
+        if self.dry and path_data.exists():
+            shutil.rmtree(path_data)
+    
         return path_data
+
 
 
     def launch_methods(self, train_validation=False, check=False, select_results=None):
@@ -203,18 +278,9 @@ class ExperimentManager:
                 return paths_results[-1]
 
         # select method config depending on whether we do train_validation or testing
-        if train_validation:
-            assert self.methods_validation_config is not None, \
-                f"Error when loading or file not found for methods_validation.yaml at path:\n" \
-                f"{self.methods_validation_config_path}"
-            methods_config = self.methods_validation_config
-            methods_config_path = self.methods_validation_config_path
-            config_file_name = EXPERIMENT_CONFIG_METHODS_VALIDATION
-
-        else:
-            methods_config = self.methods_config
-            methods_config_path = self.methods_config_path
-            config_file_name = EXPERIMENT_CONFIG_METHODS
+        methods_config = self.methods_config
+        methods_config_path = self.methods_config_path
+        config_file_name = EXPERIMENT_CONFIG_METHODS
 
         # init results folder
         path_results = self._init_folder(EXPERIMENT_PREDS, inherit_from=path_data)

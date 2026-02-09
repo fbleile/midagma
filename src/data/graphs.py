@@ -7,6 +7,8 @@ import numpy as np
 from src.utils.graphs import *
 from jax import random
 
+from definitions import DEFAULT_GRAPH_TYPES
+
 GraphType = Literal["ER", "ER_acyclic", "scale_free", "scale_free_acyclic", "sbm", "sbm_acyclic"]
 
 def sample_erdos_renyi(
@@ -222,11 +224,7 @@ if __name__ == "__main__":
 
     key = random.PRNGKey(int(args.seed))
 
-    graph_types = [
-        "ER", "ER_acyclic",
-        "scale_free", "scale_free_acyclic",
-        "sbm", "sbm_acyclic",
-    ]
+    graph_types = DEFAULT_GRAPH_TYPES
 
     print("\n=== graph sampler smoke test ===")
     print(f"seed={args.seed}  d={args.d}  s0={args.s0}  n_trials={args.n_trials}\n")

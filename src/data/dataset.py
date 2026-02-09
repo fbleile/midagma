@@ -90,9 +90,9 @@ class Dataset:
     def load(cls, ds_root: Union[str, Path]) -> "Dataset":
         P = cls.paths(ds_root)
         X = np.load(P["X"], allow_pickle=False)
-        B_true = np.load(P["B_true"], allow_pickle=False)
-        W_true = np.load(P["W_true"], allow_pickle=False)
-        I_full = np.load(P["I_full"], allow_pickle=False)
-        I = np.load(P["I"], allow_pickle=False)
+        B_true = np.load(P[TRUE_DIR / "B_true"], allow_pickle=False)
+        W_true = np.load(P[TRUE_DIR / "W_true"], allow_pickle=False)
+        I_full = np.load(P[TRUE_DIR / "I_full"], allow_pickle=False)
+        I = np.load(P[TRUE_DIR / "I"], allow_pickle=False)
         meta = load_yaml(P["meta_yaml"])
         return cls(X=X, B_true=B_true, W_true=W_true, I_full=I_full, I=I, meta=meta)

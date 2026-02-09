@@ -49,9 +49,9 @@ SLURM_LOGS_DIR = PROJECT_DIR / SUBDIR_SLURM_LOGS
 
 # ---------- experiment structure ----------
 CONFIG_DATA = "data.yaml"
-CONFIG_DATA_GRID = "grid.yaml"
+CONFIG_DATA_GRID = "data_grid.yaml"
 CONFIG_METHODS = "methods.yaml"
-CONFIG_METHODS_VALIDATION = "methods_validation.yaml"
+CONFIG_METHODS_HYPERPARAMS = "methods_hyperparams.yaml"
 
 SUBDIR_EXPERIMENTS = SRC_DIR / "experiments"
 EXPERIMENT_COMMANDS_LIST = SUBDIR_EXPERIMENTS / "command_list.txt"
@@ -72,14 +72,21 @@ FILE_RESULTS_PARQUET = "results.parquet"
 NAN_MIN = -1e12
 NAN_MAX = +1e12
 
-# ---------- default dataset families (optional convenience) ----------
-# DEFAULT_DATA_GEN_TYPES = [
-#     "lin_sem_er",
-#     "lin_sem_er_acyclic",
-#     "lin_sem_scale_free",
-#     "lin_sem_sbm",
-#     "nonlin_sem_er",
-# ]
+DEFAULT_GRAPH_TYPES = [
+    "ER", "ER_acyclic",
+    "scale_free", "scale_free_acyclic",
+    "sbm", "sbm_acyclic",
+]
+
+DEFAULT_LINEAR_SEM_TYPES = ["gauss", "exp", "gumbel", "uniform", "logistic", "poisson",]
+DEFAULT_NONLINEAR_SEM_TYPES = ["mlp", "mim",]
+
+DEFAULT_SEM_TYPES = (
+    DEFAULT_LINEAR_SEM_TYPES
+    + DEFAULT_NONLINEAR_SEM_TYPES
+)
+
+DATA_GRID_KEYS = ["n", "d", "s0", "graph_type", "sem_type", "min_indeps"]
 
 # cluster
 YAML_RUN = "__run__"
