@@ -324,7 +324,7 @@ class ExperimentManager:
     
             for resolved, choices in candidates:
                 # filename encodes the hyperparam choices => uniqueness + provenance
-                fname = grid_choice_filename(choices, prefix=f"method_{block_id}")
+                fname = grid_choice_filename(choices, prefix=f"{block_id}")
                 p = configs_dir / fname
                 if not self.dry:
                     save_yaml(resolved, p)
@@ -383,132 +383,56 @@ class ExperimentManager:
         return path_results
 
 
-
-
-
-    def make_data_summary(self):
-        # check results have been generated
-        path_data = self.make_data(check=True)
-
-        # init results folder
-        path_plots = self._init_folder(EXPERIMENT_DATA_SUMMARY, inherit_from=path_data)
+    def make_summary(self):
+        """
+        Create evaluation summary for all runs of this experiment.
+    
+        Scrapes:
+          results/<experiment>/**/runs/**/meta.yaml
+    
+        Outputs:
+          results/<experiment>/<summary_XX>/
+            eval_long.csv
+            eval_pivot_median.csv
+            eval_meta.yaml
+        """
+        # init summary folder (like make_data / launch_methods)
+        path_results = self.launch_methods(check=True)
+    
+        path_summary = self._init_folder("summary", root_path=self.store_path_results, dry=self.dry)
         if self.dry:
-            shutil.rmtree(path_plots)
-
-        # print data sets expected and found
-        if self.data_grid_config is not None:
-            n_datasets = self.n_datasets_grid * len(self.data_grid_config)
-
-        else:
-            n_datasets = self.n_datasets
-
-        data_found = sorted([p for p in path_data.iterdir() if p.is_dir()])
-        print(f"Found data seeds: {[int(p.name) for p in data_found]}")
-        if len(data_found) != n_datasets:
-            warnings.warn(f"\nNumber of data sets does not match data config "
-                f"(got: `{len(data_found)}`, expected `{n_datasets}`).\n"
-                f"data path: {path_data}\n")
-            if len(data_found) < n_datasets:
-                print("Exiting.")
-                # return
-            else:
-                print(f"Taking first {n_datasets} data folders")
-
-        elif self.verbose:
-            print(f"\nLaunching summary experiment for {len(data_found)} data sets.")
-
-        # create summary
-        experiment_name = kwargs.experiment.replace("/", "--")
-        cmd = f"python '{PROJECT_DIR}/experiment/data_summary.py' " \
-              f"--path_data {path_data} " \
-              f"--path_plots '{path_plots}' " \
-              f"--descr '{experiment_name}-{path_plots.parts[-1]}' "
-
+            # create then remove later; but we still want the command preview
+            pass
+    
+        experiment_name = self.experiment.replace("/", "--")
+    
+        cmd = (
+            f"python '{PROJECT_DIR}/src/eval/launch_eval.py' "
+            f"--path_results '{path_results}' "
+            f"--runs_subdir 'runs' "
+            f"--out_dir '{path_summary}' "
+            f"--thr 1e-12 "
+            f"--descr '{experiment_name}-summary' "
+        )
+    
         generate_run_commands(
             command_list=[cmd],
-            array_throttle=SLURM_SUBMISSION_MAX,
             mode=self.compute,
-            hours=23,
-            mins=59,
+            hours=0,
+            mins=20,
             n_cpus=2,
             n_gpus=0,
             mem=4000,
             prompt=False,
             dry=self.dry,
-            output_path_prefix=self.slurm_logs_dir,
+            output_path_prefix=f"{path_results}/logs/",
         )
-        return path_plots
+    
+        if self.dry and path_results.exists():
+            shutil.rmtree(path_results)
+    
+        return path_results
 
-
-    def make_summary(self, train_validation=False, inject_hyperparams=False, wasser_eps=None, select_results=None):
-        # check results have been generated
-        path_data = self.make_data(check=True)
-        path_results = self.launch_methods(check=True, train_validation=train_validation, select_results=select_results)
-
-        # init results folder
-        subdir = EXPERIMENT_SUMMARY_VALIDATION if train_validation else EXPERIMENT_SUMMARY
-        path_plots = self._init_folder(EXPERIMENT_SUMMARY, inherit_from=path_results)
-        if self.dry:
-            shutil.rmtree(path_plots)
-
-        # select method config depending on whether we do train_validation or testing
-        if train_validation:
-            assert self.methods_validation_config is not None, \
-                f"Error when loading or file not found for methods_validation.yaml at path:\n" \
-                f"{self.methods_validation_config_path}"
-            methods_config = self.methods_validation_config
-            methods_config_path = self.methods_validation_config_path
-            suffix =  "_train_validation"
-
-        else:
-            methods_config = self.methods_config
-            methods_config_path = self.methods_config_path
-            suffix = ""
-        
-        # print results expected and found
-        results = sorted([p for p in path_results.iterdir()])
-        results_found = {}
-        for j, (method, _) in enumerate(methods_config.items()):
-            n_expected = self.n_datasets
-            results_found[method] = list(filter(lambda p: p.name.rsplit("_", 1)[0] == method + suffix, results))
-            warn = not len(results_found[method]) == n_expected
-            print(f"{method + ':':50s}"
-                  f"{len(results_found[method]):3d}/{n_expected}\t\t"
-                  f"{'(!)' if warn else ''}"
-                  f"\t{[int(p.stem.rsplit('_', 1)[1]) for p in results_found[method]] if j == 0 else ''}")
-
-        # create summary
-        experiment_name = kwargs.experiment.replace("/", "--")
-        cmd = f"python '{PROJECT_DIR}/experiment/summary.py' " \
-              f"--methods_config_path {methods_config_path} " \
-              f"--path_data {path_data} " \
-              f"--path_plots '{path_plots}' " \
-              f"--path_results '{path_results}' " \
-              f"--descr '{experiment_name}-{path_plots.parts[-1]}' "
-              
-        if train_validation:
-            cmd += f"--train_validation "
-        if train_validation and inject_hyperparams:
-            cmd += f"--inject_hyperparams "
-        if wasser_eps is not None:
-            cmd += f"--wasser_eps {wasser_eps} "
-        if self.only_methods is not None:
-            cmd += f"--only_methods " + " ".join(self.only_methods) + " "
-
-        generate_run_commands(
-            command_list=[cmd],
-            array_throttle=SLURM_SUBMISSION_MAX,
-            mode=self.compute,
-            hours=11,
-            mins=59,
-            n_cpus=4,
-            n_gpus=0,
-            mem=4000,
-            prompt=False,
-            dry=self.dry,
-            output_path_prefix=self.slurm_logs_dir,
-        )
-        return path_plots
 
 
 
@@ -564,12 +488,7 @@ if __name__ == '__main__':
         _ = exp.make_data_summary()
 
     elif kwargs.summary or kwargs.summary_train_validation:
-        _ = exp.make_summary(
-                train_validation=kwargs.summary_train_validation,
-                inject_hyperparams=kwargs.inject_hyperparams,
-                wasser_eps=kwargs.wasser_eps,
-                select_results=kwargs.select_results
-            )
+        _ = exp.make_summary()
 
     else:
         raise ValueError("Unknown option passed")

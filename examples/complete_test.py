@@ -351,7 +351,6 @@ def run_suite(
     
                 W_est = run_algo(
                     X=X,
-                    B_true=B_true,
                     trek_reg=trek_reg,
                     algo_spec=algo,
                     logger=logger,

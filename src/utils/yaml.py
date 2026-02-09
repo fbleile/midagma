@@ -151,7 +151,7 @@ def grid_choice_filename(choices: Dict[str, Any], *, prefix: str = "data", max_l
     name = "__".join(parts)
     if len(name) > max_len:
         name = name[:max_len]
-    return f"{prefix}_{name}.yaml"
+    return f"{prefix}__{name}.yaml"
 
 
 def list_yaml_files(dir_path: PathLike, *, exclude: Iterable[str] = ()) -> List[Path]:
