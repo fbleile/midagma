@@ -12,7 +12,7 @@ import numpy as np
 from jax import random
 
 from src.utils.rng import np_rng_from_key
-from src.data.data_spec import DataSpec, save_yaml, load_data_config
+from src.data.data_spec import DataSpec, save_yaml, load_data_config_to_spec
 from src.data.indep_spec import ISpec, build_I_full_and_capped
 from src.data.graphs import sample_graph
 from src.data.sem import simulate_parameter, simulate_linear_sem, simulate_nonlinear_sem
@@ -99,8 +99,7 @@ def generate_and_store(
       data/<descr>/datasets/<dataset_id>/{X.npy, meta/...}
     """
 
-    root = Path(path_data) / descr
-    ds_root = root / "datasets" / str(dataset_id)
+    ds_root = path_data / str(dataset_id)
 
     # 1) generate dataset object
     with timer() as wall:
@@ -148,12 +147,6 @@ def generate_and_store(
     # 3) save via dataset object
     ds2.save(ds_root)
 
-    # 4) provenance: copy config yaml once (optional)
-    if data_config_path is not None:
-        cfg_path = Path(data_config_path)
-        root.mkdir(parents=True, exist_ok=True)
-        (root / "data.yaml").write_text(cfg_path.read_text(encoding="utf-8"), encoding="utf-8")
-
     return ds_root
 
 
@@ -166,19 +159,24 @@ if __name__ == "__main__":
     parser.add_argument("--n_datasets", type=int, required=False, default=1)
     parser.add_argument("--sanity_check_plots", action="store_true")
     args = parser.parse_args()
+    
+    print(args.descr)
 
 
     data_config_path = resolve_from_project(args.data_config_path)
     path_data = resolve_from_project(args.path_data)
 
     # load spec
-    cfg_id, data_spec, i_spec = load_data_config(data_config_path)
+    cfg_id, data_spec, i_spec = load_data_config_to_spec(data_config_path)
     
     if args.n_datasets is not None:
         n_datasets = args.n_datasets
     
+    task_id = str(args.descr.rsplit("-", 1)[-1]) if args.descr is not None else "1"
+        
+    
     # NEW: plan dataset ids up-front (append-only), ids are strings
-    datasets_dir = (path_data / args.descr / "datasets")
+    datasets_dir = path_data
     datasets_dir.mkdir(parents=True, exist_ok=True)
     
     existing_ids = []
@@ -197,8 +195,11 @@ if __name__ == "__main__":
     keys = random.split(base_key, int(n_datasets))
     
     # CHANGED: enumerate over (dataset_id, subkey)
-    for dataset_id, subkey in zip(dataset_ids, keys):
+    for i, subkey in zip(dataset_ids, keys):
         spec_k = DataSpec(**data_spec.__dict__)
+        dataset_id = task_id
+        if n_datasets > 1:
+            dataset_id += "-" + i 
     
         out = generate_and_store(
             descr=args.descr,                 # e.g. "lin_sem_er"

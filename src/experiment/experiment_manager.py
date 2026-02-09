@@ -13,6 +13,7 @@ from pathlib import Path
 from jax import random
 
 from src.utils.yaml import load_yaml
+from src.experiment.launch import generate_run_commands
 
 from definitions import (
     PROJECT_DIR,
@@ -26,7 +27,6 @@ from definitions import (
     YAML_RUN,
     DEFAULT_RUN_KWARGS,
     
-    SLURM_SUBMISSION_MAX,
     SLURM_LOGS_DIR,
     
     CONFIG_DIR,
@@ -47,7 +47,8 @@ class ExperimentManager:
         self.experiment = experiment # lin-er-acyclic / lin-er / ... / nonlin-er-acyclic
         self.config_path = CONFIG_DIR / self.experiment
         self.store_path_root = ((CLUSTER_SCRATCH_DIR if scratch else CLUSTER_GROUP_DIR) if IS_CLUSTER else PROJECT_DIR)
-        self.store_path = self.store_path_root / SUBDIR_RESULTS / self.experiment
+        self.store_path_results = self.store_path_root / SUBDIR_RESULTS / self.experiment
+        self.store_path_data = self.store_path_root / SUBDIR_DATA / self.experiment
         self.key = random.PRNGKey(seed)
         self.seed = seed
         self.compute = compute
@@ -60,28 +61,32 @@ class ExperimentManager:
         self.n_datasets = n_datasets
         
         # Data setup
+        def exists_or_none(p):
+            return p if p.exists() else None
 
-        self.data_config_path = self.config_path / CONFIG_DATA
-        self.data_grid_config_path = self.config_path / CONFIG_DATA_GRID
-        self.methods_config_path = self.config_path / CONFIG_METHODS
-        self.methods_validation_config_path = self.config_path / CONFIG_METHODS_VALIDATION
+
+        self.data_config_path = exists_or_none(self.config_path / CONFIG_DATA)
+        self.data_grid_config_path = exists_or_none(self.config_path / CONFIG_DATA_GRID)
+        self.methods_config_path = exists_or_none(self.config_path / CONFIG_METHODS)
+        self.methods_validation_config_path = exists_or_none(self.config_path / CONFIG_METHODS_VALIDATION)
 
         if self.verbose:
             if self.config_path.exists() \
                 and self.config_path.is_dir():
                 print("experiment:       ", self.experiment, flush=True)
-                print("data directory:", self.data_path, flush=True, end="\n\n")
-                print("results directory:", self.store_path, flush=True, end="\n\n")
+                print("data directory:", self.store_path_data, flush=True, end="\n\n")
+                print("results directory:", self.store_path_results, flush=True, end="\n\n")
             else:
                 print(f"experiment `{self.experiment}` not specified in `{self.config_path}`."
                       f"check spelling and files")
                 exit(1)
 
         # parse configs
-        self.data_config = load_yaml(self.data_config_path)
-        # TODO self.data_grid_config = load_yaml(self.data_grid_config_path)
-        self.methods_config = load_yaml(self.methods_config_path)
-        self.methods_validation_config = load_yaml(self.methods_validation_config_path)
+        self.data_config = load_yaml(self.data_config_path) if self.data_config_path else None
+        # self.data_grid_config = load_yaml(self.data_grid_config_path) if self.data_grid_config_path else None
+        self.methods_config = load_yaml(self.methods_config_path) if self.methods_config_path else None
+        self.methods_validation_config = load_yaml(self.methods_validation_config_path) if self.methods_validation_config_path else None
+
         
         # Methods setup
 
@@ -111,7 +116,7 @@ class ExperimentManager:
 
     def _list_main_folders(self, subdir, root_path=None, inherit_from=None):
         if root_path is None:
-            root_path = self.store_path
+            root_path = self.store_path_results
         subdir = self._inherit_specification(subdir, inherit_from)
         if root_path.is_dir():
             return sorted([
@@ -124,7 +129,7 @@ class ExperimentManager:
 
     def _init_folder(self, subdir, root_path=None, inherit_from=None, dry=False, add_logs_folder=False):
         if root_path is None:
-            root_path = self.store_path
+            root_path = self.store_path_results
         subdir = self._inherit_specification(subdir, inherit_from)
         existing = self._list_main_folders(subdir, root_path=root_path)
         if existing:
@@ -145,15 +150,15 @@ class ExperimentManager:
         shutil.copy(from_path, to_path)
 
 
-    def make_data(self, check=False, grid=False):
+    def make_data(self, check=False):
         assert self.data_config is not None, \
             f"Error when loading or file not found for data.yaml at path:\n" \
             f"{self.data_config_path}"
         n_datasets = self.n_datasets
 
         # init data folder
-        path_data = self._init_folder(SUBDIR_DATA)
-        self._copy_file(self.data_config_path, path_data / config_file_name)
+        path_data = self._init_folder(SUBDIR_DATA, root_path=self.store_path_data )
+        self._copy_file(self.data_config_path, path_data)
         if self.dry:
             shutil.rmtree(path_data)
 
@@ -161,45 +166,24 @@ class ExperimentManager:
         experiment_name = kwargs.experiment.replace("/", "--")
         cmd = f"python '{PROJECT_DIR}/src/data/data_gen.py' " \
               r"--seed \$SLURM_ARRAY_TASK_ID " \
-              f"--data_config_path '{data_config_path}' " \
-              f"--path_data '{path_data}' "
+              f"--data_config_path '{self.data_config_path}' " \
+              f"--path_data '{path_data}' " \
+              rf"--descr '{experiment_name}-data-\$SLURM_ARRAY_TASK_ID' " \
 
-        if grid:
-            grid_ids = range(len(self.data_grid_config))
-        else:
-            grid_ids = [None]
-        
-        # define throttle to respect job submition limit
-        if len(grid_ids) > SLURM_SUBMISSION_MAX:
-            raise RuntimeError(
-                    f"Slurm submission limit exceeded: "
-                    f"planned {grid_ids} grid points, but the max allowed is {SLURM_SUBMISSION_MAX}. "
-                    "Execution stopped."
-                )
+        generate_run_commands(
+            array_command=cmd,
+            array_indices=range(1, n_datasets + 1),
+            mode=self.compute,
+            hours=2,
+            mins=59,
+            n_cpus=2,
+            n_gpus=0,
+            mem=2000,
+            prompt=False,
+            dry=self.dry,
+            output_path_prefix=self.slurm_logs_dir,
+        )
 
-        for grid_id in grid_ids:
-            cmd_final = cmd
-            if grid_id is not None:
-                cmd_final += f"--grid_id {grid_id} "
-                cmd_final += rf"--descr '{experiment_name}-data-{grid_id}-\$SLURM_ARRAY_TASK_ID' "
-            else:
-                cmd_final += rf"--descr '{experiment_name}-data-\$SLURM_ARRAY_TASK_ID' "
-
-            generate_run_commands(
-                array_command=cmd_final,
-                array_indices=range(1, n_datasets + 1),
-                mode=self.compute,
-                hours=2,
-                mins=59,
-                n_cpus=2,
-                n_gpus=0,
-                mem=2000,
-                prompt=False,
-                dry=self.dry,
-                output_path_prefix=self.slurm_logs_dir,
-            )
-
-        print(f"\nLaunched {n_datasets * len(grid_ids)} runs total ({len(grid_ids)} grid options)")
         return path_data
 
 
@@ -476,7 +460,7 @@ if __name__ == '__main__':
                             subdir_results=kwargs.subdir_results)
 
     if kwargs.data or kwargs.data_grid:
-        _ = exp.make_data(grid=kwargs.data_grid)
+        _ = exp.make_data()
 
     elif kwargs.methods or kwargs.methods_train_validation:
         _ = exp.launch_methods(train_validation=kwargs.methods_train_validation)

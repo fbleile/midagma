@@ -8,6 +8,15 @@ from src.utils.yaml import save_yaml, load_yaml
 
 import numpy as np
 
+from definitions import (
+    FILE_X,
+    FILE_B_TRUE,
+    FILE_W_TRUE,
+    FILE_I,
+    FILE_META,
+    TRUE_DIR,
+)
+
 
 @dataclass(frozen=True)
 class Dataset:
@@ -44,7 +53,7 @@ class Dataset:
     @staticmethod
     def paths(ds_root: Union[str, Path]) -> Dict[str, Path]:
         ds_root = Path(ds_root)
-        true_dir = ds_root / "true_dir"
+        true_dir = ds_root / TRUE_DIR
         return {
             "ds_root": ds_root,
             "true_dir": true_dir,
