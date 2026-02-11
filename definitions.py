@@ -51,6 +51,8 @@ SLURM_LOGS_DIR = PROJECT_DIR / SUBDIR_SLURM_LOGS
 CONFIG_DATA = "data.yaml"
 CONFIG_DATA_GRID = "data_grid.yaml"
 CONFIG_METHODS = "methods.yaml"
+CONFIG_METHODS_BASELINE_HYPER = "methods_baseline_hyper.yaml"
+CONFIG_METHODS_NOTREK_HYPER = "methods_notrek_hyper.yaml"
 CONFIG_METHODS_HYPERPARAMS = "methods_hyperparams.yaml"
 
 SUBDIR_EXPERIMENTS = SRC_DIR / "experiments"

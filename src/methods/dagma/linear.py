@@ -247,15 +247,19 @@ class DagmaLinear:
             
             Gobj = G_score + mu * self.lambda1 * np.sign(W) + 2 * W * M.T + mask_inc * np.sign(W)
             
+            G_trek_norm = None
             # add trek penalty gradient if enabled and mode="opt"
-            trek_val, trek_grad = trek_value_grad(
-                W,
-                self.trek_reg,
-                torch_dtype=self._torch_dtype,
-                device=self._device,
-            )
-            if self.trek_reg is not None and self.trek_reg.enabled() and self.trek_reg.mode == "opt":
-                Gobj = Gobj + self.trek_reg.weight * trek_grad
+            if self.trek_reg is not None and self.trek_reg.enabled():
+                trek_val, trek_grad = trek_value_grad(
+                    W,
+                    self.trek_reg,
+                    torch_dtype=self._torch_dtype,
+                    device=self._device,
+                )
+                if self.trek_reg.mode == "opt":
+                    Gobj = Gobj + self.trek_reg.weight * trek_grad
+                    trek_weight = 0.0 if (self.trek_reg is None) else float(getattr(self.trek_reg, "weight", 0.0))
+                    G_trek_norm = float(np.linalg.norm(trek_weight * trek_grad)) if trek_grad is not None else 0.0
 
             
             # ----- gradient diagnostics (raw objective gradient) -----
@@ -265,9 +269,7 @@ class DagmaLinear:
             G_l1_norm = float(np.linalg.norm(mu * self.lambda1 * np.sign(W)))
             G_inc_norm = float(np.linalg.norm(mask_inc * np.sign(W)))
             
-            trek_weight = 0.0 if (self.trek_reg is None) else float(getattr(self.trek_reg, "weight", 0.0))
-            G_trek_norm = float(np.linalg.norm(trek_weight * trek_grad)) if trek_grad is not None else 0.0
-
+            
             ## Adam step
             grad = self._adam_update(Gobj, iter, beta_1, beta_2)
             grad_norm = float(np.linalg.norm(grad))

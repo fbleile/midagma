@@ -34,9 +34,9 @@ from definitions import (
     
     CONFIG_DIR,
     CONFIG_DATA,
-    CONFIG_DATA_GRID,
+    CONFIG_METHODS_BASELINE_HYPER,
+    CONFIG_METHODS_NOTREK_HYPER,
     CONFIG_METHODS,
-    CONFIG_METHODS_HYPERPARAMS,
     
     DATA_DIR,
     
@@ -75,7 +75,8 @@ class ExperimentManager:
 
 
         self.data_config_path = exists_or_none(self.config_path / CONFIG_DATA)
-        self.data_grid_config_path = exists_or_none(self.config_path / CONFIG_DATA_GRID)
+        self.methods_baseine_hyper_config_path = exists_or_none(self.config_path / CONFIG_METHODS_BASELINE_HYPER)
+        self.methods_notreks_hyper_config_path = exists_or_none(self.config_path / CONFIG_METHODS_NOTREK_HYPER)
         self.methods_config_path = exists_or_none(self.config_path / CONFIG_METHODS)
         
         if self.verbose:
@@ -264,7 +265,7 @@ class ExperimentManager:
 
 
 
-    def launch_methods(self, *, check: bool = False):
+    def launch_methods(self, *, check: bool = False, method_config: str = 'methods.yaml'):
         # 1) check data exists
         path_data = self.make_data(check=True)
     
@@ -308,7 +309,7 @@ class ExperimentManager:
             mapping_path.write_text("\n".join(dataset_ids) + "\n", encoding="utf-8")
     
         # 5) expand methods.yaml into concrete configs (one YAML per instance)
-        grid = load_yaml(self.methods_config_path)
+        grid = load_yaml(method_config)
         methods = grid.get("methods", [])
         assert isinstance(methods, list), "methods.yaml must contain a top-level list: methods: [...]"
     
@@ -444,32 +445,26 @@ if __name__ == '__main__':
     parser.add_argument("--compute", type=str, default="local")
 
     parser.add_argument("--data", action="store_true")
-    parser.add_argument("--data_grid", action="store_true")
-    parser.add_argument("--methods_train_validation", action="store_true")
+    parser.add_argument("--methods_baseline_hyper", action="store_true")
+    parser.add_argument("--methods_notreks_hyper", action="store_true")
     parser.add_argument("--methods", action="store_true")
-    parser.add_argument("--summary_data", action="store_true")
-    parser.add_argument("--summary_train_validation", action="store_true")
     parser.add_argument("--summary", action="store_true")
     
-    parser.add_argument("--inject_hyperparams", action="store_true")
+    parser.add_argument("--launch_type", action="store_true")
 
     parser.add_argument("--scratch", action="store_true")
 
     parser.add_argument("--n_datasets", type=int, help="overwrites default specified in config")
     parser.add_argument("--only_methods",nargs="*",type=str,)
-    parser.add_argument("--wasser_eps", type=float)
-    parser.add_argument("--select_results", type=str)
     parser.add_argument("--subdir_results", type=str)
 
     kwargs = parser.parse_args()
 
     kwargs_sum = sum([
-        kwargs.data_grid,
         kwargs.data,
-        kwargs.methods_train_validation,
+        kwargs.methods_baseline_hyper,
+        kwargs.methods_notreks_hyper,
         kwargs.methods,
-        kwargs.summary_data,
-        kwargs.summary_train_validation,
         kwargs.summary,
     ])
     assert kwargs_sum == 1, f"pass 1 option, got `{kwargs_sum}`"
@@ -478,16 +473,19 @@ if __name__ == '__main__':
                             dry=not kwargs.submit, only_methods=kwargs.only_methods, scratch=kwargs.scratch,
                             subdir_results=kwargs.subdir_results)
 
-    if kwargs.data or kwargs.data_grid:
+    if kwargs.data:
         _ = exp.make_data()
 
+    elif kwargs.methods_baseline_hyper:
+        _ = exp.launch_methods(method_config=exp.methods_baseine_hyper_config_path)
+
+    elif kwargs.methods_notreks_hyper:
+        _ = exp.launch_methods(method_config=exp.methods_notreks_hyper_config_path)
+
     elif kwargs.methods:
-        _ = exp.launch_methods()
+        _ = exp.launch_methods(method_config=exp.methods_config_path)
 
-    elif kwargs.summary_data:
-        _ = exp.make_data_summary()
-
-    elif kwargs.summary or kwargs.summary_train_validation:
+    elif kwargs.summary:
         _ = exp.make_summary()
 
     else:
