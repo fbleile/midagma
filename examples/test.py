@@ -249,7 +249,7 @@ def run_suite(
                     logger,
                     log_cfg,
                 )
-                print(W_est, W_true)
+                # print(W_est, W_true)
                 thr_best, acc = find_best_threshold_for_shd(W_true, W_est)
 
                 reg_vals = direct_reg_values(W_true, W_est, I, trek_cfg)
@@ -331,10 +331,10 @@ def run_suite(
 
 def default_suite() -> Tuple[List[DataSpec], ISpec, List[AlgoCfg], List[TrekCfg]]:
     data_specs = [
-        DataSpec(seed=25, n=1000, d=10, s0=20, graph_type="ER", sem_type="gauss"),
+        DataSpec(seed=25, n=1000, d=40, s0=200, graph_type="ER", sem_type="gauss"),
     ]
 
-    i_spec = ISpec(source="oracle", pst_seq_for_oracle="exp", cap=1)
+    i_spec = ISpec(source="oracle", pst_seq_for_oracle="exp")
 
     # IMPORTANT: algo_cfgs are dicts now; spec_cls filtering will pick correct fields per algo.
     algo_cfgs: List[AlgoCfg] = [
@@ -350,17 +350,28 @@ def default_suite() -> Tuple[List[DataSpec], ISpec, List[AlgoCfg], List[TrekCfg]
         #     "s": 1.0,
         # },
         # ---------------------------------------------------------
-        # NODAGS — nonlinear flow-based baseline
+        # DAGMA — linear NOTEARS-style baseline
         # ---------------------------------------------------------
         {
-            "name": "nodags",
-            "fun_type": "gst-mlp",
-            "epochs": 1000,
-            "batch_size": 512,
-            "lr": .01,
-            "optim": "adam",
-            "dag_input": True,
+            "name": "midagma_linear",
+            "loss_type": "l2",
+            "lambda1": 0.0002,
+            "max_iter": int(12e4),
+            "mu_factor": 0.1,
+            "s": 1.2,
         },
+        # # ---------------------------------------------------------
+        # # NODAGS — nonlinear flow-based baseline
+        # # ---------------------------------------------------------
+        # {
+        #     "name": "nodags",
+        #     "fun_type": "lin-mlp",
+        #     "epochs": 100,
+        #     "batch_size": 128,
+        #     "lr": .001,
+        #     "optim": "adam",
+        #     "dag_input": True,
+        # },
         # # ---------------------------------------------------------
         # # KDS — stadion linear stationary diffusion baseline
         # # (conceptually similar to dagma_linear but SDE-based)
@@ -369,16 +380,15 @@ def default_suite() -> Tuple[List[DataSpec], ISpec, List[AlgoCfg], List[TrekCfg]
         #     "name": "kds",
         #     "model": "linear",          # matches LinearSDEWithTrek
         #     "seed": 0,
-        #     "thresh_val": 1e-12,
     
         #     # stadion.fit(...) kwargs
         #     "targets": None,
-        #     "bandwidth": 5.0,
+        #     "bandwidth": 2.0,
         #     "estimator": "linear",
         #     "learning_rate": 3e-3,
-        #     "steps": 10_000,
+        #     "steps": 20_000,
         #     "batch_size": 128,
-        #     "reg": 1e-3,
+        #     "reg": 1e-2,
         #     "warm_start_intv": True,
         #     "device": None,
         #     "verbose": 10,
@@ -390,10 +400,9 @@ def default_suite() -> Tuple[List[DataSpec], ISpec, List[AlgoCfg], List[TrekCfg]
 
 
     trek_cfgs: List[TrekCfg] = [
-        {"name": "pst", "weight": 0.001, "seq": "log", "K_log": 40, "eps_inv": 1e-8, "s": 5.0, "agg": "mean", "mode": "off"},
-        {"name": "pst", "weight": .1, "seq": "exp", "K_log": 40, "eps_inv": 1e-8, "s": 5.0, "agg": "mean", "mode": "opt"},
-        {"name": "tcc", "cycle_penalty": "spectral", "weight": 0.1, "w": 1., "n_iter": 10, "eps": 1e-12,
-          "version": "approx_trek_graph", "method": "eig_torch", "mode": "opt"},
+        {"name": "pst", "weight": .1, "seq": "log", "K_log": 40, "eps_inv": 1e-8, "s": 5.0, "agg": "mean", "mode": "off"},
+        # {"name": "pst", "weight": .01, "seq": "exp", "K_log": 40, "eps_inv": 1e-8, "s": 5.0, "agg": "mean", "mode": "opt"},
+        # {"name": "tcc", "cycle_penalty": "spectral", "version": "approx_trek_graph", "weight": 0.01, "w": 1., "mode": "opt"},
     ]
 
     return data_specs, i_spec, algo_cfgs, trek_cfgs
@@ -420,8 +429,7 @@ def print_overview_table(df: pd.DataFrame):
     print(df[cols].to_string(index=False))
     print("=======================================================\n")
 
-
-def main():
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run full small pipeline test (no viz, outputs table).")
     parser.add_argument("--I_source", type=str, default=None, choices=["oracle", "pairwise"])
     parser.add_argument("--seed", type=int, default=None)
@@ -443,31 +451,4 @@ def main():
 
     df = run_suite(data_specs, i_spec, algo_cfgs, trek_cfgs)
     print_overview_table(df)
-
-
-if __name__ == "__main__":
-    main()
-    # key = random.PRNGKey(0)
-    # n, d = 1000, 5
-
-    # # generate a dataset
-    # key, subk = random.split(key)
-    # w = random.normal(subk, shape=(d, d))
-
-    # key, subk = random.split(key)
-    # data = random.normal(subk, shape=(n, d)) @ w
-
-    # # fit stationary diffusion model
-    # model = LinearSDE()
-    # # model = MLPSDE()
-
-    # key, subk = random.split(key)
-    # model.fit(subk, data)
-
-    # # sample from model or get parameters
-    # key, subk = random.split(key)
-    # x_pred = model.sample(subk, 1000)
-    # param = model.param
-
-    # pprint(param)
 

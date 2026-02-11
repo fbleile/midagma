@@ -94,7 +94,9 @@ DATA_GRID_KEYS = ["n", "d", "s0", "graph_type", "sem_type", "min_indeps"]
 # ---------- methods ----------
 BASELINES = [
     "dagma_linear",
-    "dagma_nonlinear",
+    # "dagma_nonlinear",
+    # "kds",
+    # "nodags",
 ]
 
 

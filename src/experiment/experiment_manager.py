@@ -491,6 +491,8 @@ if __name__ == '__main__':
     else:
         raise ValueError("Unknown option passed")
 
+# !python src/experiment/experiment_manager.py acyclic_d20_large_samples --methods_notreks_hyper --n_datasets=10 --submit
+
 # !python manager.py scm-er --data --submit --n_datasets=50
 # !python manager.py scm-er --methods_train_validation --n_datasets 50 --submit --only_methods ours-lnl_u_diag ours-linear_u_diag
 # !python manager.py scm-er --summary_train_validation --n_datasets 50 --submit --only_methods ours-lnl_u_diag ours-linear_u_diag
