@@ -103,6 +103,7 @@ if __name__ == "__main__":
         W_true_path = ds_root / fmap["W_true"]
         B_true_path = ds_root / fmap["B_true"]
         I_true_path = ds_root / fmap["I"]
+        data_meta_path = meta_path
     
         if not W_true_path.exists():
             rejects.append({
