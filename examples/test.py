@@ -251,6 +251,7 @@ def run_suite(
                 )
                 # print(W_est, W_true)
                 thr_best, acc = find_best_threshold_for_shd(W_true, W_est)
+                thr_best, acc = 0., evaluate_structure(B_true, W_true, W_est)
 
                 reg_vals = direct_reg_values(W_true, W_est, I, trek_cfg)
                 
@@ -331,16 +332,16 @@ def run_suite(
 
 def default_suite() -> Tuple[List[DataSpec], ISpec, List[AlgoCfg], List[TrekCfg]]:
     data_specs = [
-        DataSpec(seed=25, n=1000, d=40, s0=200, graph_type="ER", sem_type="gauss"),
+        DataSpec(seed=25, n=400, d=50, s0=400, graph_type="ER", sem_type="gauss"),
     ]
 
     i_spec = ISpec(source="oracle", pst_seq_for_oracle="exp")
 
     # IMPORTANT: algo_cfgs are dicts now; spec_cls filtering will pick correct fields per algo.
     algo_cfgs: List[AlgoCfg] = [
-        # # ---------------------------------------------------------
-        # # DAGMA — linear NOTEARS-style baseline
-        # # ---------------------------------------------------------
+        # ---------------------------------------------------------
+        # DAGMA — linear NOTEARS-style baseline
+        # ---------------------------------------------------------
         # {
         #     "name": "dagma_linear",
         #     "loss_type": "l2",
@@ -349,17 +350,18 @@ def default_suite() -> Tuple[List[DataSpec], ISpec, List[AlgoCfg], List[TrekCfg]
         #     "mu_factor": 0.1,
         #     "s": 1.0,
         # },
-        # ---------------------------------------------------------
-        # DAGMA — linear NOTEARS-style baseline
-        # ---------------------------------------------------------
-        {
-            "name": "midagma_linear",
-            "loss_type": "l2",
-            "lambda1": 0.0002,
-            "max_iter": int(12e4),
-            "mu_factor": 0.1,
-            "s": 1.2,
-        },
+        # # ---------------------------------------------------------
+        # # DAGMA — linear NOTEARS-style baseline
+        # # ---------------------------------------------------------
+        # {
+        #     "name": "midagma_linear",
+        #     "loss_type": "l2",
+        #     "lambda1": 0.02,
+        #     "max_iter": int(12e4),
+        #     "mu_factor": 0.5,
+        #     "s": 1.,
+        #     "seed": 0,
+        # },
         # # ---------------------------------------------------------
         # # NODAGS — nonlinear flow-based baseline
         # # ---------------------------------------------------------
@@ -372,6 +374,15 @@ def default_suite() -> Tuple[List[DataSpec], ISpec, List[AlgoCfg], List[TrekCfg]
         #     "optim": "adam",
         #     "dag_input": True,
         # },
+        # # ---------------------------------------------------------
+        # # NO TEARS — linear baseline
+        # # ---------------------------------------------------------
+        {
+            "name": "notears_linear",
+            "loss_type": "l2",
+            "lambda1": 1.0,        # NOTEARS default in your original snippet
+            "max_iter": 1000,
+        },
         # # ---------------------------------------------------------
         # # KDS — stadion linear stationary diffusion baseline
         # # (conceptually similar to dagma_linear but SDE-based)
@@ -401,8 +412,8 @@ def default_suite() -> Tuple[List[DataSpec], ISpec, List[AlgoCfg], List[TrekCfg]
 
     trek_cfgs: List[TrekCfg] = [
         {"name": "pst", "weight": .1, "seq": "log", "K_log": 40, "eps_inv": 1e-8, "s": 5.0, "agg": "mean", "mode": "off"},
-        # {"name": "pst", "weight": .01, "seq": "exp", "K_log": 40, "eps_inv": 1e-8, "s": 5.0, "agg": "mean", "mode": "opt"},
-        # {"name": "tcc", "cycle_penalty": "spectral", "version": "approx_trek_graph", "weight": 0.01, "w": 1., "mode": "opt"},
+        {"name": "pst", "weight": .1, "seq": "exp", "K_log": 40, "eps_inv": 1e-8, "s": 5.0, "agg": "mean", "mode": "opt"},
+        # {"name": "tcc", "cycle_penalty": "spectral", "version": "approx_trek_graph", "method": "eig_torch", "weight": 1000., "w": 1., "mode": "opt"},
     ]
 
     return data_specs, i_spec, algo_cfgs, trek_cfgs

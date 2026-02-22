@@ -55,8 +55,8 @@ CONFIG_METHODS_BASELINE_HYPER = "methods_baseline_hyper.yaml"
 CONFIG_METHODS_NOTREK_HYPER = "methods_notrek_hyper.yaml"
 CONFIG_METHODS_HYPERPARAMS = "methods_hyperparams.yaml"
 
-SUBDIR_EXPERIMENTS = SRC_DIR / "experiments"
-EXPERIMENT_COMMANDS_LIST = SUBDIR_EXPERIMENTS / "command_list.txt"
+SUBDIR_EXPERIMENTS = SRC_DIR / "experiment"
+EXPERIMENT_COMMANDS_LIST = SUBDIR_EXPERIMENTS / "cluster_command_list.txt"
 
 # ---------- canonical filenames ----------
 FILE_X = "X.npy"

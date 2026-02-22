@@ -381,6 +381,10 @@ class ExperimentManager:
             f"\nLaunched {n_launched} runs total "
             f"({len(cfg_paths)} method instances × up to {min(len(data_found), self.n_datasets)} datasets)"
         )
+        
+        if self.dry and path_results.exists():
+            shutil.rmtree(path_results)
+        
         return path_results
 
 
@@ -429,8 +433,8 @@ class ExperimentManager:
             output_path_prefix=f"{path_results}/logs/",
         )
     
-        if self.dry and path_results.exists():
-            shutil.rmtree(path_results)
+        if self.dry and path_summary.exists():
+            shutil.rmtree(path_summary)
     
         return path_results
 
