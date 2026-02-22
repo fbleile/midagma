@@ -75,7 +75,7 @@ class ExperimentManager:
 
 
         self.data_config_path = exists_or_none(self.config_path / CONFIG_DATA)
-        self.methods_baseine_hyper_config_path = exists_or_none(self.config_path / CONFIG_METHODS_BASELINE_HYPER)
+        self.methods_baseline_hyper_config_path = exists_or_none(self.config_path / CONFIG_METHODS_BASELINE_HYPER)
         self.methods_notreks_hyper_config_path = exists_or_none(self.config_path / CONFIG_METHODS_NOTREK_HYPER)
         self.methods_config_path = exists_or_none(self.config_path / CONFIG_METHODS)
         
@@ -241,7 +241,7 @@ class ExperimentManager:
                 r"--seed \$SLURM_ARRAY_TASK_ID "
                 rf"--data_config_path '{cfg_path}' "
                 rf"--path_data '{path_data}' "
-                rf"--descr '{experiment_name}-data-{cfg_idx:02d}\$SLURM_ARRAY_TASK_ID' "
+                rf"--descr '{experiment_name}-data-{cfg_idx:02d}$SLURM_ARRAY_TASK_ID' "
             )
     
             generate_run_commands(
@@ -276,7 +276,7 @@ class ExperimentManager:
     
         # 2) init results folder
         path_results = self._init_folder(SUBDIR_RESULTS, inherit_from=path_data)
-        self._copy_file(self.methods_config_path, path_results / CONFIG_METHODS)
+        self._copy_file(method_config, path_results / CONFIG_METHODS)
     
         # 3) list dataset ids (folder names), ignore "_" folders
         data_found = sorted(
@@ -447,6 +447,7 @@ if __name__ == '__main__':
     parser.add_argument("experiment", type=str, nargs="?", default="test", help="experiment config folder")
     parser.add_argument("--submit", action="store_true")
     parser.add_argument("--compute", type=str, default="local")
+    parser.add_argument("--seed", type=int)
 
     parser.add_argument("--data", action="store_true")
     parser.add_argument("--methods_baseline_hyper", action="store_true")
@@ -474,14 +475,17 @@ if __name__ == '__main__':
     assert kwargs_sum == 1, f"pass 1 option, got `{kwargs_sum}`"
 
     exp = ExperimentManager(experiment=kwargs.experiment, compute=kwargs.compute, n_datasets=kwargs.n_datasets,
+                            seed=kwargs.seed if kwargs.seed is not None else 0,
                             dry=not kwargs.submit, only_methods=kwargs.only_methods, scratch=kwargs.scratch,
                             subdir_results=kwargs.subdir_results)
-
+    
     if kwargs.data:
+        if kwargs.seed is None:
+            raise ValueError("Seed undefined")
         _ = exp.make_data()
 
     elif kwargs.methods_baseline_hyper:
-        _ = exp.launch_methods(method_config=exp.methods_baseine_hyper_config_path)
+        _ = exp.launch_methods(method_config=exp.methods_baseline_hyper_config_path)
 
     elif kwargs.methods_notreks_hyper:
         _ = exp.launch_methods(method_config=exp.methods_notreks_hyper_config_path)
@@ -494,6 +498,8 @@ if __name__ == '__main__':
 
     else:
         raise ValueError("Unknown option passed")
+        
+# !python src/experiment/experiment_manager.py acyclic_d20_hyper --data --n_datasets=4 --seed=1 --submit
 
 # !python src/experiment/experiment_manager.py acyclic_d20_large_samples --methods_notreks_hyper --n_datasets=10 --submit
 

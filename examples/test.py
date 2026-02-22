@@ -332,7 +332,7 @@ def run_suite(
 
 def default_suite() -> Tuple[List[DataSpec], ISpec, List[AlgoCfg], List[TrekCfg]]:
     data_specs = [
-        DataSpec(seed=25, n=400, d=50, s0=400, graph_type="ER", sem_type="gauss"),
+        DataSpec(seed=10, n=500, d=20, s0=100, graph_type="ER", sem_type="gauss"),
     ]
 
     i_spec = ISpec(source="oracle", pst_seq_for_oracle="exp")
@@ -342,14 +342,14 @@ def default_suite() -> Tuple[List[DataSpec], ISpec, List[AlgoCfg], List[TrekCfg]
         # ---------------------------------------------------------
         # DAGMA — linear NOTEARS-style baseline
         # ---------------------------------------------------------
-        # {
-        #     "name": "dagma_linear",
-        #     "loss_type": "l2",
-        #     "lambda1": 0.02,
-        #     "max_iter": int(6e4),
-        #     "mu_factor": 0.1,
-        #     "s": 1.0,
-        # },
+        {
+            "name": "dagma_linear",
+            "loss_type": "l2",
+            "lambda1": 0.02,
+            "max_iter": int(6e4),
+            "mu_factor": 0.1,
+            "s": 1.0,
+        },
         # # ---------------------------------------------------------
         # # DAGMA — linear NOTEARS-style baseline
         # # ---------------------------------------------------------
@@ -380,8 +380,8 @@ def default_suite() -> Tuple[List[DataSpec], ISpec, List[AlgoCfg], List[TrekCfg]
         {
             "name": "notears_linear",
             "loss_type": "l2",
-            "lambda1": 1.0,        # NOTEARS default in your original snippet
-            "max_iter": 1000,
+            "lambda1": 0.1,        # NOTEARS default in your original snippet
+            "max_iter": 100,
         },
         # # ---------------------------------------------------------
         # # KDS — stadion linear stationary diffusion baseline
@@ -412,7 +412,7 @@ def default_suite() -> Tuple[List[DataSpec], ISpec, List[AlgoCfg], List[TrekCfg]
 
     trek_cfgs: List[TrekCfg] = [
         {"name": "pst", "weight": .1, "seq": "log", "K_log": 40, "eps_inv": 1e-8, "s": 5.0, "agg": "mean", "mode": "off"},
-        {"name": "pst", "weight": .1, "seq": "exp", "K_log": 40, "eps_inv": 1e-8, "s": 5.0, "agg": "mean", "mode": "opt"},
+        # {"name": "pst", "weight": 1., "seq": "exp", "K_log": 40, "eps_inv": 1e-8, "s": 5.0, "agg": "mean", "mode": "opt"},
         # {"name": "tcc", "cycle_penalty": "spectral", "version": "approx_trek_graph", "method": "eig_torch", "weight": 1000., "w": 1., "mode": "opt"},
     ]
 
