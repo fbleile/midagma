@@ -1,0 +1,10 @@
+name: strucmi
+channels:
+  - defaults
+dependencies:
+  - python=3.13
+  - spyder
+  - matplotlib
+  - pandas
+  - openai
+prefix: /opt/anaconda3/envs/strucmi
