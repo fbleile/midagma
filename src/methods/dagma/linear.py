@@ -5,9 +5,9 @@ from scipy.special import expit as sigmoid
 from tqdm.auto import tqdm
 import typing
 
-from utils.notreks import TrekRegularizer, PSTRegularizer, trek_value_grad
-from utils.logger import LogConfig, StructuredLogger, build_default_logger
-from utils.debug import safe_inv_M
+from src.utils.notreks import TrekRegularizer, PSTRegularizer, trek_value_grad
+from src.utils.logger import LogConfig, StructuredLogger, build_default_logger
+# from src.utils.debug import safe_inv_M
 import logging
 import torch
 import time
