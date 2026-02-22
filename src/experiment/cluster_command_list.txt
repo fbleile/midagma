@@ -1,0 +1,1 @@
+python '/Users/fbleile/Projects/midagma/src/eval/launch_eval.py' --path_results '/Users/fbleile/Projects/midagma/results/acyclic_d20_large_samples/results_02_00' --runs_subdir 'runs' --out_dir '/Users/fbleile/Projects/midagma/results/acyclic_d20_large_samples/summary_06' --thr 1e-12 --descr 'acyclic_d20_large_samples-summary' 
