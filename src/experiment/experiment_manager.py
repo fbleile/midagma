@@ -55,9 +55,9 @@ class ExperimentManager:
 
         self.experiment = experiment # lin-er-acyclic / lin-er / ... / nonlin-er-acyclic
         self.config_path = CONFIG_DIR / self.experiment
-        self.store_path_root = ((CLUSTER_SCRATCH_DIR if scratch else CLUSTER_GROUP_DIR) if IS_CLUSTER else PROJECT_DIR)
-        self.store_path_results = self.store_path_root / SUBDIR_RESULTS / self.experiment
-        self.store_path_data = self.store_path_root / SUBDIR_DATA / self.experiment
+        self.project_dir = ((CLUSTER_SCRATCH_DIR if scratch else CLUSTER_GROUP_DIR) if IS_CLUSTER else PROJECT_DIR)
+        self.store_path_results = self.project_dir / SUBDIR_RESULTS / self.experiment
+        self.store_path_data = self.project_dir / SUBDIR_DATA / self.experiment
         self.key = random.PRNGKey(seed)
         self.seed = seed
         self.compute = compute
@@ -237,7 +237,7 @@ class ExperimentManager:
         for cfg_idx, cfg_path in enumerate(cfg_paths):
             # dataset folder id is numeric: c cfg_idx + r SLURM_ARRAY_TASK_ID
             cmd = (
-                rf"python '{PROJECT_DIR}/src/data/launch_data.py' "
+                rf"python '{self.project_dir}/src/data/launch_data.py' "
                 r"--seed \$SLURM_ARRAY_TASK_ID "
                 rf"--data_config_path '{cfg_path}' "
                 rf"--path_data '{path_data}' "
@@ -346,7 +346,7 @@ class ExperimentManager:
             method_id = method_cfg_path.stem
         
             base_cmd = (
-                f"python '{PROJECT_DIR}/src/methods/launch_methods.py' "
+                f"python '{self.project_dir}/src/methods/launch_methods.py' "
                 f"--method_id '{method_id}' "
                 f"--method_cfg '{method_cfg_path}' "
                 f"--path_data_root '{path_data}' "
@@ -412,7 +412,7 @@ class ExperimentManager:
         experiment_name = self.experiment.replace("/", "--")
     
         cmd = (
-            f"python '{PROJECT_DIR}/src/eval/launch_eval.py' "
+            f"python '{self.project_dir}/src/eval/launch_eval.py' "
             f"--path_results '{path_results}' "
             f"--runs_subdir 'runs' "
             f"--out_dir '{path_summary}' "

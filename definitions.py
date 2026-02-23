@@ -23,7 +23,7 @@ PROJECT_DIR = Path(__file__).resolve().parent
 ROOT_DIR = PROJECT_DIR  # synonym
 
 LOCAL_STORE_DIR = Path("/cluster/path/to/anonymous/directory")
-CLUSTER_GROUP_DIR = Path("/cluster/path/to/anonymous/directory")
+CLUSTER_GROUP_DIR = Path("/dss/dsshome1/0C/ge86xim2/midagma")
 CLUSTER_SCRATCH_DIR = Path("/cluster/path/to/anonymous/directory")
 
 IS_CLUSTER = Path("/cluster").is_dir() or bool(os.environ.get("SLURM_JOB_ID", ""))
