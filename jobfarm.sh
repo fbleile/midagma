@@ -29,7 +29,7 @@ mkdir -p /tmp/matplotlib
 export PYTHONPATH="/dss/dsshome1/0C/ge86xim2/midagma:$PYTHONPATH"
 
 # Use the existing command list
-taskdb="src/experiment/cmdlist"
+taskdb="cmd"
 txt_file="${taskdb}.txt"
 echo "$txt_file"
 
