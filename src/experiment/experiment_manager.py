@@ -363,7 +363,6 @@ class ExperimentManager:
         
             cmd_args = dict(
                 command_list=command_list,
-                array_indices=range(1, len(command_list)+1),
                 mode=self.compute,
                 dry=self.dry,
                 prompt=False,
