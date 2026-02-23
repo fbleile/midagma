@@ -6,6 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, List
+import math
 
 from src.data.indep_spec import ISpec
 from src.utils.yaml import *
@@ -13,20 +14,21 @@ from src.utils.yaml import *
 # -----------------------------
 # Core specs
 # -----------------------------
+
 @dataclass(frozen=True)
 class DataSpec:
-    # core dataset shape + graph
     n: int = 500
     d: int = 10
-    s0: int = 40                 # IMPORTANT: we treat this as TOTAL number of edges
+
+    # Either specify s0 directly OR specify epv and derive s0 = round(epv * d)
+    s0: int = 40
+    epv: Optional[float] = None   # edges-per-variable (short key for YAML)
+
     graph_type: str = "ER"
-
-    # SEM type (you use e.g. "lin_gauss")
     sem_type: str = "lin_gauss"
-
-    # linear SEM parameters
     noise_scale: float = 1.0
     w_ranges: Tuple[Tuple[float, float], ...] = ((-2.0, -0.5), (0.5, 2.0))
+
 
 
 def _pick(cfg: Dict[str, Any], keys: set[str]) -> Dict[str, Any]:
@@ -49,24 +51,29 @@ def _parse_w_ranges(x: Any) -> Tuple[Tuple[float, float], ...]:
         out.append((float(low), float(high)))
     return tuple(out)
 
+def _compute_s0_from_epv(epv: float, d: int) -> int:
+    # Choose rounding policy; round is usually OK.
+    # You can also use math.floor/ceil depending on what you want.
+    return int(round(epv * d))
 
 def load_data_config_to_spec(path: Path) -> tuple[str, int, DataSpec, ISpec]:
-    """
-    Works with THIS YAML shape (flat top-level keys):
-      id, n_datasets, n, d, s0, graph_type, sem_type, noise_scale, w_ranges,
-      independencies: {...},
-    """
     cfg = load_yaml(path)
-
     cfg_id = path.parent.name
-    
-    # --- DataSpec from top-level keys ---
+
     data_keys = set(DataSpec.__dataclass_fields__.keys())
     data_dict = _pick(cfg, data_keys)
 
-    # w_ranges needs conversion from list->tuple[tuple[float,float],...]
     if "w_ranges" in cfg:
         data_dict["w_ranges"] = _parse_w_ranges(cfg.get("w_ranges"))
+
+    # --- derive s0 from epv if provided and s0 not explicitly provided ---
+    epv = cfg.get("epv", None)  # allow short key
+    if epv is not None and "s0" not in cfg:
+        d_val = cfg.get("d")
+        if isinstance(d_val, int):
+            data_dict["s0"] = _compute_s0_from_epv(float(epv), d_val)
+        else:
+            raise ValueError(f"Cannot derive s0 from epv when d is not an int (got {type(d_val)}). Expand grid first.")
 
     data_spec = DataSpec(**data_dict)
 
