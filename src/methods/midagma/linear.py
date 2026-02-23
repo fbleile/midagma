@@ -14,8 +14,8 @@ import scipy.linalg as sla
 from scipy.special import expit as sigmoid
 from tqdm.auto import tqdm
 
-from utils.notreks import TrekRegularizer, trek_value_grad  # same as in your current file
-from utils.logger import LogConfig, StructuredLogger, build_default_logger
+from src.utils.notreks import TrekRegularizer, trek_value_grad  # same as in your current file
+from src.utils.logger import LogConfig, StructuredLogger, build_default_logger
 
 
 __all__ = ["MiDagmaLinear"]

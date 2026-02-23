@@ -475,10 +475,10 @@ def test():
     # ---- robust imports (no relative dots) ----
     try:
         # normal package usage
-        from dagma import utils
+        from src.methods.dagma import utils
     except ImportError:
         # fallback if running this file directly
-        import utils
+        from src.methods.dagma import utils
 
     try:
         from notreks.mi_tests import get_I_from_full_pairwise_tests, summarize_I
