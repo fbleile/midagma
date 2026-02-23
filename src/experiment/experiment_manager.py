@@ -241,7 +241,7 @@ class ExperimentManager:
                 r"--seed \$SLURM_ARRAY_TASK_ID "
                 rf"--data_config_path '{cfg_path}' "
                 rf"--path_data '{path_data}' "
-                rf"--descr '{experiment_name}-data-{cfg_idx:02d}$SLURM_ARRAY_TASK_ID' "
+                rf"--descr '{experiment_name}-data-{cfg_idx:02d}00$SLURM_ARRAY_TASK_ID' "
             )
     
             generate_run_commands(

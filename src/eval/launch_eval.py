@@ -103,7 +103,6 @@ if __name__ == "__main__":
         W_true_path = ds_root / fmap["W_true"]
         B_true_path = ds_root / fmap["B_true"]
         I_true_path = ds_root / fmap["I"]
-        data_meta_path = meta_path
     
         if not W_true_path.exists():
             rejects.append({
@@ -126,6 +125,7 @@ if __name__ == "__main__":
                 "reason": f"failed loading npy: {e}",
                 "method_id": method_id,
                 "dataset_id": dataset_id,
+                "meta_path": str(meta_path),
                 "W_true": str(W_true_path),
                 "W_est": str(W_est_path),
                 "I": str(I_true_path),

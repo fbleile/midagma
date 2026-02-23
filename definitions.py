@@ -89,7 +89,7 @@ DEFAULT_SEM_TYPES = (
     + DEFAULT_NONLINEAR_SEM_TYPES
 )
 
-DATA_GRID_KEYS = ["n", "d", "s0", "graph_type", "sem_type", "min_indeps"]
+DATA_GRID_KEYS = ["n", "n_alpha", "d", "s0", "epv", "graph_type", "sem_type", "min_indeps"]
 
 # ---------- methods ----------
 BASELINES = [

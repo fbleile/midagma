@@ -17,17 +17,20 @@ from src.utils.yaml import *
 
 @dataclass(frozen=True)
 class DataSpec:
+    # core dataset shape + graph
     n: int = 500
     d: int = 10
-
-    # Either specify s0 directly OR specify epv and derive s0 = round(epv * d)
     s0: int = 40
-    epv: Optional[float] = None   # edges-per-variable (short key for YAML)
+
+    # derived-input knobs (optional)
+    epv: Optional[float] = None        # edges per variable: s0 ≈ epv * d
+    n_alpha: Optional[float] = None    # n_alpha = n / (epv * d)
 
     graph_type: str = "ER"
     sem_type: str = "lin_gauss"
     noise_scale: float = 1.0
     w_ranges: Tuple[Tuple[float, float], ...] = ((-2.0, -0.5), (0.5, 2.0))
+
 
 
 
@@ -51,10 +54,11 @@ def _parse_w_ranges(x: Any) -> Tuple[Tuple[float, float], ...]:
         out.append((float(low), float(high)))
     return tuple(out)
 
-def _compute_s0_from_epv(epv: float, d: int) -> int:
-    # Choose rounding policy; round is usually OK.
-    # You can also use math.floor/ceil depending on what you want.
+def _s0_from_epv(epv: float, d: int) -> int:
     return int(round(epv * d))
+
+def _n_from_nalpha(n_alpha: float, epv: float, d: int) -> int:
+    return int(round(n_alpha * epv * d))
 
 def load_data_config_to_spec(path: Path) -> tuple[str, int, DataSpec, ISpec]:
     cfg = load_yaml(path)
@@ -66,16 +70,32 @@ def load_data_config_to_spec(path: Path) -> tuple[str, int, DataSpec, ISpec]:
     if "w_ranges" in cfg:
         data_dict["w_ranges"] = _parse_w_ranges(cfg.get("w_ranges"))
 
-    # --- derive s0 from epv if provided and s0 not explicitly provided ---
-    epv = cfg.get("epv", None)  # allow short key
-    if epv is not None and "s0" not in cfg:
+    # --- derive s0 from epv if needed ---
+    if "s0" not in cfg and cfg.get("epv") is not None:
         d_val = cfg.get("d")
-        if isinstance(d_val, int):
-            data_dict["s0"] = _compute_s0_from_epv(float(epv), d_val)
-        else:
-            raise ValueError(f"Cannot derive s0 from epv when d is not an int (got {type(d_val)}). Expand grid first.")
+        if not isinstance(d_val, int):
+            raise ValueError("Deriving s0 from epv requires concrete d (int). Expand grid first.")
+        data_dict["s0"] = _s0_from_epv(float(cfg["epv"]), d_val)
+
+    # --- derive n from n_alpha if needed ---
+    if "n" not in cfg and cfg.get("n_alpha") is not None:
+        d_val = cfg.get("d")
+        if not isinstance(d_val, int):
+            raise ValueError("Deriving n from n_alpha requires concrete d (int). Expand grid first.")
+
+        epv = cfg.get("epv")
+        if epv is None:
+            # allow epv to be inferred from s0 if s0 exists
+            s0_val = data_dict.get("s0", cfg.get("s0"))
+            if s0_val is None:
+                raise ValueError("n_alpha provided but neither epv nor s0 available to infer epv.")
+            epv = float(s0_val) / float(d_val)
+
+        data_dict["n"] = _n_from_nalpha(float(cfg["n_alpha"]), float(epv), d_val)
 
     data_spec = DataSpec(**data_dict)
+    
+    print(data_spec)
 
     # --- ISpec from nested independencies ---
     indep_cfg = cfg.get("independencies", {})
