@@ -2,7 +2,7 @@
 #SBATCH -D /dss/dsshome1/0C/ge86xim2/midagma
 #SBATCH -o slurm_logs/jobfarm.%N.%j.out
 #SBATCH -J JobFarm
-#SBATCH --mail-user=fabian.bleile@posteo.de
+#SBATCH --mail-user=f.bleile@tum.de
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --get-user-env
 #SBATCH --export=ALL
