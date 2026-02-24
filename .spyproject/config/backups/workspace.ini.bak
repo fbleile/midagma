@@ -4,7 +4,7 @@ save_data_on_exit = True
 save_history = True
 save_non_project_files = False
 project_type = 'empty-project-type'
-recent_files = ['src/experiment/experiment_manager.py', 'examples/test.py', 'src/methods/method_spec.py', 'src/methods/kds/models.py', 'src/utils/notreks.py', 'src/methods/dagma/linear.py', 'src/methods/midagma/linear.py', 'src/eval/launch_eval.py', 'configs/acyclic_d20_large_samples/methods_notrek_hyper.yaml', 'results/acyclic_d20_large_samples/summary_03/hp_eval/dagma_linear_pst__avg.tex', 'results/acyclic_d20_large_samples/summary_03/hp_eval/dagma_linear_tcc__avg.tex']
+recent_files = ['src/experiment/experiment_manager.py', 'examples/test.py', 'src/eval/launch_eval.py', 'results/acyclic_d20_large_samples/summary_06/eval_long.csv', 'src/eval/summarize_eval.py', 'src/eval/metrics.py', 'configs/acyclic_benchmark/methods.yaml', 'src/documentation/generate.py', 'results/acyclic_d20_hyper/results_00_00/runs/dagma_linear__algo.lambda1=0.0__algo.s=0.8/001/meta.yaml', 'configs/acyclic_benchmark/data.yaml', 'src/analysis/analyis.py', 'src/analysis/__init__.py']
 
 [main]
 version = 0.2.0

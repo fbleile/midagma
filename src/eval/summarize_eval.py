@@ -23,8 +23,7 @@ DEFAULT_METRIC_DIR: Dict[str, MetricDir] = {
     "tpr": "max",
 }
 
-DEFAULT_METRICS = ["shd", "fhd", "nnz_err", "fdr", "fpr", "precision", "pst_exp"]
-
+DEFAULT_METRICS = ["shd", "fhd", "fro_rel", "nnz_true", "nnz_est", "nnz_err", "tp","fp","fn","tn","precision","fdr","tpr","fpr", "precision", "pst_exp"]
 
 def _ensure_base_method_id(df: pd.DataFrame) -> pd.DataFrame:
     if "base_method_id" not in df.columns:
