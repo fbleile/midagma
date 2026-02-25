@@ -23,7 +23,13 @@ DEFAULT_METRIC_DIR: Dict[str, MetricDir] = {
     "tpr": "max",
 }
 
-DEFAULT_METRICS = ["shd", "fhd", "fro_rel", "nnz_true", "nnz_est", "nnz_err", "tp","fp","fn","tn","precision","fdr","tpr","fpr", "precision", "pst_exp"]
+DEFAULT_METRICS = [
+    "shd", "fhd", "fro_rel",
+    "nnz_true", "nnz_est", "nnz_err",
+    "tp", "fp", "fn", "tn",
+    "precision", "fdr", "tpr", "fpr",
+    "pst_exp",
+]
 
 def _ensure_base_method_id(df: pd.DataFrame) -> pd.DataFrame:
     if "base_method_id" not in df.columns:
@@ -143,6 +149,7 @@ def _aggregate_tables(
     Return dict of tables: avg, median, rank_mean, score_mean
     Each table indexed by entity_col.
     """
+    
     # mean/median over datasets
     avg = df.groupby(entity_col)[metrics].mean(numeric_only=True)
     std = df.groupby(entity_col)[metrics].std(numeric_only=True)
@@ -195,6 +202,10 @@ def summarize_eval(
 
     metric_dirs = dict(DEFAULT_METRIC_DIR) if metric_dirs is None else dict(metric_dirs)
     metrics = list(DEFAULT_METRICS) if metrics is None else list(metrics)
+    
+    seen = set()
+    metrics = [m for m in metrics if not (m in seen or seen.add(m))]
+
 
     # keep only available metrics
     metrics = [m for m in metrics if m in df.columns]

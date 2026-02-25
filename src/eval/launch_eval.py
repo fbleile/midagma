@@ -19,17 +19,9 @@ def _find_run_metas(runs_root: Path) -> List[Path]:
 
 
 def _resolve_dataset_root(meta: Dict[str, Any]) -> Optional[Path]:
-    # preferred: dataset_meta.data_path (you asked for this)
-    ds_meta = meta.get("dataset_meta", {}) or {}
-    if "data_path" in ds_meta and ds_meta["data_path"] is not None:
-        return Path(ds_meta["data_path"])
-
-    # fallback: meta.paths.dataset_root (your launch_methods currently writes this)
-    paths = meta.get("paths", {}) or {}
-    if "dataset_root" in paths and paths["dataset_root"] is not None:
-        return Path(paths["dataset_root"])
-
-    return None
+    p = meta["dataset_meta"]["data_path"]
+    p = str(p)
+    return Path("data" + p.split("/data", 1)[1])
 
 
 def _dataset_filemap(ds_root: Path) -> Dict[str, str]:
@@ -150,6 +142,7 @@ if __name__ == "__main__":
     
     df = pd.DataFrame(rows)
     df.to_csv(out_csv, index=False)
+
 
     summarize_eval(
         eval_csv=out_csv,
