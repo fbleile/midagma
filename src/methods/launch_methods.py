@@ -95,6 +95,7 @@ def make_trek_reg(I: np.ndarray, cfg: Dict[str, Any]) -> Any:
             cycle_penalty=str(cfg.get("cycle_penalty", "spectral")),
             weight=weight,
             w=float(cfg.get("w", 100.0)),
+            idx_mode=float(cfg.get("idx_mode", "node_random")),
             n_iter=int(cfg.get("n_iter", 10)),
             eps=float(cfg.get("eps", 1e-12)),
             mode=str(cfg.get("mode", "opt")),

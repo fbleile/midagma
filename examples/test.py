@@ -331,8 +331,11 @@ def run_suite(
 
 
 def default_suite() -> Tuple[List[DataSpec], ISpec, List[AlgoCfg], List[TrekCfg]]:
-    data_specs = [
-        DataSpec(seed=19, n=200, d=20, s0=80, graph_type="ER", sem_type="gauss"),
+    data_specs = [ #32 --> 22, 34 --> 1 , 42-->2, 43-->13, 40-->3
+        # DataSpec(seed=43, n=200, d=20, s0=80, graph_type="ER", sem_type="gauss"),
+        DataSpec(seed=43, n=100, d=20, s0=80, graph_type="ER", sem_type="gauss"),
+        # DataSpec(seed=40, n=200, d=20, s0=80, graph_type="ER", sem_type="gauss"),
+        DataSpec(seed=40, n=100, d=20, s0=80, graph_type="ER", sem_type="gauss"),
     ]
 
     i_spec = ISpec(source="oracle", pst_seq_for_oracle="exp")
@@ -412,9 +415,11 @@ def default_suite() -> Tuple[List[DataSpec], ISpec, List[AlgoCfg], List[TrekCfg]
 
     trek_cfgs: List[TrekCfg] = [
         {"name": "pst", "weight": .1, "seq": "log", "K_log": 40, "eps_inv": 1e-8, "s": 5.0, "agg": "mean", "mode": "off"},
-        {"name": "pst", "weight": 1., "seq": "exp", "K_log": 40, "eps_inv": 1e-8, "s": 5.0, "agg": "mean", "mode": "opt"},
-        # {"name": "tcc", "cycle_penalty": "spectral", "version": "exact_original_graph", "method": "eig_torch", "weight": .0001, "w": 1., "mode": "opt"},
-        {"name": "tcc", "cycle_penalty": "spectral", "version": "DAG_learning", "method": "eig_torch", "weight": .001, "w": 1., "mode": "opt"},
+        # {"name": "pst", "weight": 1., "seq": "exp", "K_log": 40, "eps_inv": 1e-8, "s": 5.0, "agg": "mean", "mode": "opt"},
+        {"name": "tcc", "cycle_penalty": "spectral", "version": "approx_trek_graph", "method": "eig_torch", "weight": .00001, "w": 1., "mode": "opt", "idx_mode": "node_random"},
+        {"name": "tcc", "cycle_penalty": "spectral", "version": "approx_trek_graph", "method": "eig_torch", "weight": .00001, "w": 10., "mode": "opt", "idx_mode": "node_random"},
+        {"name": "tcc", "cycle_penalty": "spectral", "version": "approx_trek_graph", "method": "eig_torch", "weight": .00001, "w": 100., "mode": "opt", "idx_mode": "node_random"},
+
 
     ]
 
