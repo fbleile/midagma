@@ -252,6 +252,8 @@ def run_suite(
                 # print(W_est, W_true)
                 thr_best, acc = find_best_threshold_for_shd(W_true, W_est)
                 thr_best, acc = 0., evaluate_structure(B_true, W_true, W_est)
+                
+                print(W_est)
 
                 reg_vals = direct_reg_values(W_true, W_est, I, trek_cfg)
                 
@@ -332,12 +334,14 @@ def run_suite(
 
 def default_suite() -> Tuple[List[DataSpec], ISpec, List[AlgoCfg], List[TrekCfg]]:
     data_specs = [ #32 --> 22, 34 --> 1 , 42-->2, 43-->13, 40-->3
-        # DataSpec(seed=43, n=200, d=20, s0=80, graph_type="ER", sem_type="gauss"),
-        DataSpec(seed=43, n=100, d=20, s0=80, graph_type="ER", sem_type="gauss"),
-        # DataSpec(seed=40, n=200, d=20, s0=80, graph_type="ER", sem_type="gauss"),
-        DataSpec(seed=40, n=100, d=20, s0=80, graph_type="ER", sem_type="gauss"),
+        # DataSpec(seed=43, n=100, d=20, s0=80, graph_type="ER", sem_type="gauss"),
+        # DataSpec(seed=32, n=80, d=20, s0=80, graph_type="ER", sem_type="gauss"),
+        DataSpec(seed=26, n=50, d=10, s0=20, graph_type="ER", sem_type="gauss"),
     ]
-
+    
+        # DataSpec(seed=5, n=10, d=5, s0=7, graph_type="ER", sem_type="gauss"),
+        # DataSpec(seed=42, n=10, d=5, s0=8, graph_type="ER", sem_type="gauss"),
+        
     i_spec = ISpec(source="oracle", pst_seq_for_oracle="exp")
 
     # IMPORTANT: algo_cfgs are dicts now; spec_cls filtering will pick correct fields per algo.
@@ -415,9 +419,9 @@ def default_suite() -> Tuple[List[DataSpec], ISpec, List[AlgoCfg], List[TrekCfg]
 
     trek_cfgs: List[TrekCfg] = [
         {"name": "pst", "weight": .1, "seq": "log", "K_log": 40, "eps_inv": 1e-8, "s": 5.0, "agg": "mean", "mode": "off"},
-        # {"name": "pst", "weight": 1., "seq": "exp", "K_log": 40, "eps_inv": 1e-8, "s": 5.0, "agg": "mean", "mode": "opt"},
-        {"name": "tcc", "cycle_penalty": "spectral", "version": "approx_trek_graph", "method": "eig_torch", "weight": .00001, "w": 1., "mode": "opt", "idx_mode": "node_random"},
-        {"name": "tcc", "cycle_penalty": "spectral", "version": "approx_trek_graph", "method": "eig_torch", "weight": .00001, "w": 10., "mode": "opt", "idx_mode": "node_random"},
+        {"name": "pst", "weight": 1., "seq": "exp", "K_log": 40, "eps_inv": 1e-8, "s": 5.0, "agg": "mean", "mode": "opt"},
+        # {"name": "tcc", "cycle_penalty": "spectral", "version": "approx_trek_graph", "method": "eig_torch", "weight": .00001, "w": 1., "mode": "opt", "idx_mode": "node_random"},
+        # {"name": "tcc", "cycle_penalty": "spectral", "version": "approx_trek_graph", "method": "eig_torch", "weight": .00001, "w": 10., "mode": "opt", "idx_mode": "node_random"},
         {"name": "tcc", "cycle_penalty": "spectral", "version": "approx_trek_graph", "method": "eig_torch", "weight": .00001, "w": 100., "mode": "opt", "idx_mode": "node_random"},
 
 
