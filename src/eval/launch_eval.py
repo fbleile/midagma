@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+import re
 
 import numpy as np
 import pandas as pd
@@ -54,6 +55,8 @@ if __name__ == "__main__":
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     
+    print(out_dir)
+    
     out_csv = out_dir / "eval_long.csv"
     out_meta = out_dir / "eval_meta.yaml"
     
@@ -82,6 +85,7 @@ if __name__ == "__main__":
             continue
     
         ds_root = _resolve_dataset_root(meta)
+        # ds_root = Path(re.sub(r"data_\d{2}", "data_00", str(ds_root)))
         if ds_root is None:
             rejects.append({
                 "run_dir": str(run_dir),
